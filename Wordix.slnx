@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Wordix.Api/Wordix.Api.csproj" />
+    <Project Path="src/Wordix.Application/Wordix.Application.csproj" />
+    <Project Path="src/Wordix.Domain/Wordix.Domain.csproj" />
+    <Project Path="src/Wordix.Infrastructure/Wordix.Infrastructure.csproj" />
+    <Project Path="src/Wordix.Persistence/Wordix.Persistence.csproj" />
+    <Project Path="src/Wordix.Shared/Wordix.Shared.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Wordix.IntegrationTests/Wordix.IntegrationTests.csproj" />
+    <Project Path="tests/Wordix.UnitTests/Wordix.UnitTests.csproj" />
+  </Folder>
+</Solution>
