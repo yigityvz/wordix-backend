@@ -1,0 +1,6 @@
+@Wordix.Api_HostAddress = http://localhost:5000
+
+GET {{Wordix.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
