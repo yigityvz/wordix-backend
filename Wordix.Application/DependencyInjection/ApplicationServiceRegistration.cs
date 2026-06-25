@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Wordix.Application.Common.Behaviors;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Services;
+using Wordix.Application.Features.Lookups.Services;
 
 namespace Wordix.Application.DependencyInjection;
 
@@ -47,6 +48,9 @@ public static class ApplicationServiceRegistration
         // Böylece loglama request'in validation dahil tüm süresini ölçer.
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+
+        services.AddSingleton<ITextNormalizer, TextNormalizer>();
+        services.AddSingleton<ILookupClassifier, LookupClassifier>();
 
         // UserProfileSyncService application seviyesinde bir workflow servisidir.
         // Current token kullanıcısını Wordix UserProfile kaydıyla eşleştirir.

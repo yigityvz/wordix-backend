@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Infrastructure.Identity;
+using Wordix.Application.Features.Lookups.Services;
+using Wordix.Infrastructure.Dictionary;
 
 namespace Wordix.Infrastructure.DependencyInjection;
 
@@ -36,6 +38,11 @@ public static class InfrastructureServiceRegistration
         // Scoped seçiyoruz çünkü current user bilgisi HTTP request'e bağlıdır.
         // Her request içinde aynı kullanıcı bilgisi kullanılmalıdır.
         services.AddScoped<ICurrentUserService, KeycloakCurrentUserService>();
+
+        // Lookup dictionary provider:
+        // Faz 13'te prototype provider kullanıyoruz.
+        // Faz 24'te gerçek provider/import sistemi geldiğinde bu registration değiştirilebilir.
+        services.AddSingleton<IDictionaryProvider, PrototypeDictionaryProvider>();
 
         return services;
     }
