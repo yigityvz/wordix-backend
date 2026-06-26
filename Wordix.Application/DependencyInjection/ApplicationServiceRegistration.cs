@@ -5,6 +5,7 @@ using Wordix.Application.Common.Behaviors;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Services;
 using Wordix.Application.Features.Lookups.Services;
+using Wordix.Application.Features.Quizzes.Services;
 
 namespace Wordix.Application.DependencyInjection;
 
@@ -49,12 +50,16 @@ public static class ApplicationServiceRegistration
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
-        services.AddSingleton<ITextNormalizer, TextNormalizer>();
-        services.AddSingleton<ILookupClassifier, LookupClassifier>();
-
         // UserProfileSyncService application seviyesinde bir workflow servisidir.
         // Current token kullanıcısını Wordix UserProfile kaydıyla eşleştirir.
         services.AddScoped<IUserProfileSyncService, UserProfileSyncService>();
+
+        services.AddSingleton<ITextNormalizer, TextNormalizer>();
+        services.AddSingleton<ILookupClassifier, LookupClassifier>();
+
+        // Quiz feature servisleri:
+        // İlk prototipte multiple choice translation generator kullanılır.
+        services.AddScoped<IQuizQuestionGenerator, MultipleChoiceTranslationQuestionGenerator>();
 
         return services;
     }
