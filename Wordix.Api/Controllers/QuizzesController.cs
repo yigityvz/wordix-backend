@@ -2,6 +2,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wordix.Application.Features.Quizzes.Commands.StartQuiz;
+using Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
+using Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 using Wordix.Application.Features.Quizzes.Requests;
 using Wordix.Application.Features.Quizzes.Responses;
 using Wordix.Shared.Responses;
@@ -130,4 +132,71 @@ public sealed class QuizzesController : ControllerBase
             StatusCodes.Status201Created,
             apiResponse);
     }
+
+    /// <summary>
+    /// Current user'ın quiz session'ındaki bir soruya cevap gönderir.
+    /// 
+    /// Endpoint:
+    /// POST /api/quizzes/{quizSessionId}/answers
+    /// 
+    /// Body:
+    /// {
+    ///   "selectedQuizOptionId": "...",
+    ///   "questionResponseTimeInMilliseconds": 3500
+    /// }
+    /// </summary>
+    [HttpPost("{quizSessionId:guid}/answers")]
+    [ProducesResponseType(typeof(ApiResponse<SubmitQuizAnswerResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<SubmitQuizAnswerResponse>>> SubmitAnswer(
+        [FromRoute] Guid quizSessionId,
+        [FromBody] SubmitQuizAnswerRequest request,
+        CancellationToken cancellationToken)
+    {
+        var command = new SubmitQuizAnswerCommand(
+            quizSessionId,
+            request.SelectedQuizOptionId,
+            request.QuestionResponseTimeInMilliseconds);
+
+        var response = await _sender.Send(
+            command,
+            cancellationToken);
+
+        return Ok(
+            ApiResponse<SubmitQuizAnswerResponse>.Ok(
+                response,
+                "Quiz answer submitted successfully."));
+    }
+
+    /// <summary>
+    /// Current user'ın quiz session summary bilgisini getirir.
+    /// 
+    /// Endpoint:
+    /// GET /api/quizzes/{quizSessionId}/summary
+    /// </summary>
+    [HttpGet("{quizSessionId:guid}/summary")]
+    [ProducesResponseType(typeof(ApiResponse<QuizSummaryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<QuizSummaryResponse>>> GetSummary(
+        [FromRoute] Guid quizSessionId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetQuizSummaryQuery(quizSessionId);
+
+        var response = await _sender.Send(
+            query,
+            cancellationToken);
+
+        return Ok(
+            ApiResponse<QuizSummaryResponse>.Ok(
+                response,
+                "Quiz summary retrieved successfully."));
+    }
+
 }

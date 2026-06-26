@@ -61,6 +61,22 @@ public static class ApplicationServiceRegistration
         // İlk prototipte multiple choice translation generator kullanılır.
         services.AddScoped<IQuizQuestionGenerator, MultipleChoiceTranslationQuestionGenerator>();
 
+        // Quiz answer evaluation:
+        // Cevap değerlendirme logic'ini handler'dan ayrı tutar.
+        services.AddScoped<IQuizAnswerEvaluator, QuizAnswerEvaluator>();
+
+        // Learning score calculation:
+        // Cevap sonucuna göre confidence score hesaplar.
+        services.AddScoped<ILearningScoreCalculator, LearningScoreCalculator>();
+
+        // Review schedule calculation:
+        // Cevap sonucu, confidence score ve repetition level'a göre bir sonraki tekrar tarihini hesaplar.
+        services.AddScoped<IReviewScheduleCalculator, ReviewScheduleCalculator>();
+
+        // Learning progress update:
+        // Cevap sonucu, score sonucu ve mevcut progress değerlerine göre yeni progress state'i hesaplar.
+        services.AddScoped<ILearningProgressUpdater, LearningProgressUpdater>();
+
         return services;
     }
 }
