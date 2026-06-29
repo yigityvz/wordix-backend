@@ -1,13 +1,12 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
+using Wordix.Application.Features.UserDictionary.Mappers;
 using Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 using Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryItemById;
 using Wordix.Application.Features.UserDictionary.Requests;
 using Wordix.Application.Features.UserDictionary.Responses;
 using Wordix.Shared.Responses;
-using WordixValidationException = Wordix.Application.Common.Exceptions.ValidationException;
 
 namespace Wordix.Api.Controllers;
 
@@ -26,8 +25,10 @@ namespace Wordix.Api.Controllers;
 /// - UserLearningItem oluşturmaz.
 /// - UserLearningProgress oluşturmaz.
 /// - Ownership/business rule kontrolü yapmaz.
+/// - Elle validation yapmaz.
 /// 
-/// Bunların tamamı Application katmanındaki command/query handler'larda yapılır.
+/// Bunların tamamı Application katmanındaki command/query handler'larda
+/// ve ValidationBehavior üzerinden çalışan validatorlarda yapılır.
 /// </summary>
 [ApiController]
 [Route("api/user-dictionary")]
@@ -38,11 +39,6 @@ public sealed class UserDictionaryController : ControllerBase
 
     /// <summary>
     /// ISender, MediatR üzerinden command/query göndermek için kullanılır.
-    /// 
-    /// Neden ISender?
-    /// - Controller sadece command/query gönderiyor.
-    /// - Notification publish etmiyor.
-    /// - IMediator yerine daha dar interface kullanmak daha temizdir.
     /// </summary>
     public UserDictionaryController(ISender sender)
     {
@@ -64,10 +60,11 @@ public sealed class UserDictionaryController : ControllerBase
     /// 
     /// Akış:
     /// 1. Request body alınır.
-    /// 2. SaveLearningItemCommand'e manual map edilir.
+    /// 2. SaveLearningItemRequest, UserDictionaryMapper üzerinden SaveLearningItemCommand'e dönüştürülür.
     /// 3. MediatR üzerinden handler'a gönderilir.
-    /// 4. Handler UserLearningItem + UserLearningProgress + LearningProgressHistory oluşturur.
-    /// 5. Response ApiResponse içine sarılarak döner.
+    /// 4. ValidationBehavior, SaveLearningItemCommandValidator'ı çalıştırır.
+    /// 5. Handler UserLearningItem + UserLearningProgress + LearningProgressHistory oluşturur.
+    /// 6. Response ApiResponse içine sarılarak döner.
     /// </summary>
     [HttpPost]
     [ProducesResponseType(typeof(ApiResponse<SaveLearningItemResponse>), StatusCodes.Status201Created)]
@@ -80,31 +77,13 @@ public sealed class UserDictionaryController : ControllerBase
         [FromBody] SaveLearningItemRequest? request,
         CancellationToken cancellationToken)
     {
-        // Request body tamamen boş gelirse command'e map edemeyiz.
-        // Bu durumda kendi ValidationException'ımızı fırlatıyoruz.
-        // ExceptionMiddleware bunu standart 400 VALIDATION_ERROR formatına çevirir.
-        if (request is null)
-        {
-            throw new WordixValidationException(new[]
-            {
-                new ValidationError(
-                    propertyName: "Body",
-                    errorMessage: "Request body is required.",
-                    errorCode: "REQUEST_BODY_REQUIRED")
-            });
-        }
+        // Request DTO → Command dönüşümü feature mapper üzerinden yapılır.
+        //
+        // Controller burada null body veya Guid.Empty kontrolü yapmaz.
+        // Eğer request null gelirse mapper LearningItemId = Guid.Empty olan command üretir.
+        // SaveLearningItemCommandValidator bu durumu ValidationBehavior üzerinden yakalar.
+        var command = UserDictionaryMapper.ToSaveLearningItemCommand(request);
 
-        // API request DTO'sunu Application command modeline manual map ediyoruz.
-        // AutoMapper/Mapster kullanmıyoruz.
-        var command = new SaveLearningItemCommand
-        {
-            LearningItemId = request.LearningItemId,
-            SelectedMeaningId = request.SelectedMeaningId,
-            SourceLookupHistoryId = request.SourceLookupHistoryId
-        };
-
-        // Command'i MediatR'a gönderiyoruz.
-        // Bundan sonra LoggingBehavior, ValidationBehavior ve Handler devreye girer.
         var response = await _sender.Send(command, cancellationToken);
 
         var apiResponse = ApiResponse<SaveLearningItemResponse>.Ok(
@@ -164,21 +143,14 @@ public sealed class UserDictionaryController : ControllerBase
         Guid id,
         CancellationToken cancellationToken)
     {
-        // Route'tan Guid.Empty gelirse bu gerçek bir dictionary item id değildir.
-        // Query validator yazmadığımız için bu temel kontrolü controller sınırında yapıyoruz.
-        if (id == Guid.Empty)
-        {
-            throw new WordixValidationException(new[]
-            {
-                new ValidationError(
-                    propertyName: "Id",
-                    errorMessage: "User dictionary item id is required.",
-                    errorCode: "USER_DICTIONARY_ITEM_ID_REQUIRED")
-            });
-        }
+        // Route'tan gelen id query modeline aktarılır.
+        //
+        // Controller burada Guid.Empty kontrolü yapmaz.
+        // GetUserDictionaryItemByIdQueryValidator, ValidationBehavior üzerinden bu kontrolü yapar.
+        var query = new GetUserDictionaryItemByIdQuery(id);
 
         var response = await _sender.Send(
-            new GetUserDictionaryItemByIdQuery(id),
+            query,
             cancellationToken);
 
         return Ok(ApiResponse<UserDictionaryItemResponse>.Ok(

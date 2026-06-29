@@ -1,13 +1,11 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Wordix.Application.Features.Quizzes.Commands.StartQuiz;
-using Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
+using Wordix.Application.Features.Quizzes.Mappers;
 using Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 using Wordix.Application.Features.Quizzes.Requests;
 using Wordix.Application.Features.Quizzes.Responses;
 using Wordix.Shared.Responses;
-using WordixValidationException = Wordix.Application.Common.Exceptions.ValidationException;
 
 namespace Wordix.Api.Controllers;
 
@@ -84,50 +82,22 @@ public sealed class QuizzesController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
     public async Task<ActionResult<ApiResponse<StartQuizResponse>>> StartQuiz(
-        [FromBody] StartQuizRequest? request,
-        CancellationToken cancellationToken)
+    [FromBody] StartQuizRequest? request,
+    CancellationToken cancellationToken)
     {
-        // Request body tamamen boş gelirse command'e map edemeyiz.
-        // Bu durumda kendi ValidationException'ımızı fırlatıyoruz.
-        // ExceptionMiddleware bunu standart 400 VALIDATION_ERROR formatına çevirir.
-        if (request is null)
-        {
-            throw new WordixValidationException(new[]
-            {
-                new ValidationError(
-                    propertyName: "Body",
-                    errorMessage: "Request body is required.",
-                    errorCode: "REQUEST_BODY_REQUIRED")
-            });
-        }
+        // Request DTO → Command dönüşümü feature mapper üzerinden yapılır.
+        //
+        // Controller burada null body, boş quizType veya questionCount kontrolü yapmaz.
+        // Eğer request null gelirse mapper boş/default değerlerle command üretir.
+        // StartQuizCommandValidator bu durumu ValidationBehavior üzerinden yakalar.
+        var command = QuizMapper.ToStartQuizCommand(request);
 
-        // API request DTO'sunu Application command modeline manual map ediyoruz.
-        // AutoMapper/Mapster kullanmıyoruz.
-        var command = new StartQuizCommand
-        {
-            QuizType = request.QuizType,
-            QuizSourceType = request.QuizSourceType,
-            QuizContentMode = request.QuizContentMode,
-            QuestionCount = request.QuestionCount
-        };
-
-        // Command'i MediatR'a gönderiyoruz.
-        // Bundan sonra sırasıyla:
-        // LoggingBehavior
-        // ValidationBehavior
-        // StartQuizCommandHandler
-        // devreye girer.
         var response = await _sender.Send(command, cancellationToken);
 
         var apiResponse = ApiResponse<StartQuizResponse>.Ok(
             data: response,
             message: "Quiz started successfully.");
 
-        // Quiz başlatıldığında yeni bir QuizSession oluşturulduğu için
-        // 201 Created dönmek REST açısından uygundur.
-        //
-        // Henüz GET /api/quizzes/{id} endpointimiz olmadığı için
-        // CreatedAtAction yerine direkt 201 StatusCode dönüyoruz.
         return StatusCode(
             StatusCodes.Status201Created,
             apiResponse);
@@ -152,14 +122,18 @@ public sealed class QuizzesController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<SubmitQuizAnswerResponse>>> SubmitAnswer(
-        [FromRoute] Guid quizSessionId,
-        [FromBody] SubmitQuizAnswerRequest request,
-        CancellationToken cancellationToken)
+    [FromRoute] Guid quizSessionId,
+    [FromBody] SubmitQuizAnswerRequest? request,
+    CancellationToken cancellationToken)
     {
-        var command = new SubmitQuizAnswerCommand(
+        // Route'tan gelen quizSessionId ve request body,
+        // feature mapper üzerinden SubmitQuizAnswerCommand modeline dönüştürülür.
+        //
+        // Controller burada null body veya Guid.Empty kontrolü yapmaz.
+        // SubmitQuizAnswerCommandValidator bu kontrolleri ValidationBehavior üzerinden yapar.
+        var command = QuizMapper.ToSubmitQuizAnswerCommand(
             quizSessionId,
-            request.SelectedQuizOptionId,
-            request.QuestionResponseTimeInMilliseconds);
+            request);
 
         var response = await _sender.Send(
             command,
@@ -184,9 +158,13 @@ public sealed class QuizzesController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ApiResponse<QuizSummaryResponse>>> GetSummary(
-        [FromRoute] Guid quizSessionId,
-        CancellationToken cancellationToken)
+    [FromRoute] Guid quizSessionId,
+    CancellationToken cancellationToken)
     {
+        // Route'tan gelen quizSessionId query modeline aktarılır.
+        //
+        // Controller burada Guid.Empty kontrolü yapmaz.
+        // GetQuizSummaryQueryValidator bu kontrolü ValidationBehavior üzerinden yapar.
         var query = new GetQuizSummaryQuery(quizSessionId);
 
         var response = await _sender.Send(

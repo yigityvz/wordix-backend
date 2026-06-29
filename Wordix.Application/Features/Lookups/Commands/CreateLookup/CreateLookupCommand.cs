@@ -44,7 +44,7 @@ public sealed record CreateLookupCommand : IRequest<LookupResponse>
     /// Örnek:
     /// Kullanıcı İngilizce kelime arıyorsa sourceLanguageCode = "en"
     /// </summary>
-    public string SourceLanguageCode { get; init; } = "en";
+    public string SourceLanguageCode { get; init; } = string.Empty;
 
     /// <summary>
     /// Kullanıcının anlam/çeviri görmek istediği hedef dil kodudur.
@@ -55,5 +55,6 @@ public sealed record CreateLookupCommand : IRequest<LookupResponse>
     /// Örnek:
     /// Kullanıcı İngilizce kelimenin Türkçe anlamını istiyorsa targetLanguageCode = "tr"
     /// </summary>
-    public string TargetLanguageCode { get; init; } = "tr";
+    public string TargetLanguageCode { get; init; } = string.Empty;
+
 }

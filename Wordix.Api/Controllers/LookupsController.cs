@@ -1,12 +1,10 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Features.Lookups.Commands.CreateLookup;
+using Wordix.Application.Features.Lookups.Mappers;
 using Wordix.Application.Features.Lookups.Requests;
 using Wordix.Application.Features.Lookups.Responses;
 using Wordix.Shared.Responses;
-using WordixValidationException = Wordix.Application.Common.Exceptions.ValidationException;
 
 namespace Wordix.Api.Controllers;
 
@@ -26,8 +24,10 @@ namespace Wordix.Api.Controllers;
 /// - Provider çağırmaz.
 /// - LearningItem/Word/Meaning oluşturmaz.
 /// - LookupHistory oluşturmaz.
+/// - Elle validation yapmaz.
 /// 
-/// Bunların tamamı CreateLookupCommandHandler içinde yapılır.
+/// Bunların tamamı CreateLookupCommandHandler içinde
+/// ve ValidationBehavior üzerinden çalışan validatorlarda yapılır.
 /// Controller sadece HTTP request/response sorumluluğunu taşır.
 /// </summary>
 [ApiController]
@@ -65,7 +65,7 @@ public sealed class LookupsController : ControllerBase
     /// 
     /// Akış:
     /// 1. Request body LookupRequest olarak alınır.
-    /// 2. LookupRequest, CreateLookupCommand'e manual map edilir.
+    /// 2. LookupRequest, LookupMapper üzerinden CreateLookupCommand'e dönüştürülür.
     /// 3. Command MediatR'a gönderilir.
     /// 4. ValidationBehavior command'i doğrular.
     /// 5. CreateLookupCommandHandler lookup akışını çalıştırır.
@@ -82,31 +82,13 @@ public sealed class LookupsController : ControllerBase
         [FromBody] LookupRequest? request,
         CancellationToken cancellationToken)
     {
-        // Request body tamamen boş gelirse command'e map edemeyiz.
-        // Bu durumda kendi ValidationException'ımızı fırlatıyoruz.
-        // ExceptionMiddleware bunu standart 400 VALIDATION_ERROR formatına çevirir.
-        if (request is null)
-        {
-            throw new WordixValidationException(new[]
-            {
-                new ValidationError(
-                    propertyName: "Body",
-                    errorMessage: "Request body is required.",
-                    errorCode: "REQUEST_BODY_REQUIRED")
-            });
-        }
+        // Request DTO → Command dönüşümü feature mapper üzerinden yapılır.
+        //
+        // Controller burada null body, boş text veya language code kontrolü yapmaz.
+        // Request null gelirse mapper boş string değerleriyle command oluşturur.
+        // CreateLookupCommandValidator bu durumu ValidationBehavior üzerinden yakalar.
+        var command = LookupMapper.ToCreateLookupCommand(request);
 
-        // API request DTO'sunu Application command modeline manual map ediyoruz.
-        // AutoMapper/Mapster kullanmıyoruz.
-        var command = new CreateLookupCommand
-        {
-            Text = request.Text,
-            SourceLanguageCode = request.SourceLanguageCode,
-            TargetLanguageCode = request.TargetLanguageCode
-        };
-
-        // Command'i MediatR'a gönderiyoruz.
-        // Bundan sonra ValidationBehavior, LoggingBehavior ve Handler devreye girer.
         var response = await _sender.Send(command, cancellationToken);
 
         return Ok(ApiResponse<LookupResponse>.Ok(

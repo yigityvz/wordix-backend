@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Persistence.Contexts;
 using Wordix.Persistence.Repositories;
+using Wordix.Application.Common.Interfaces.Localization;
+using Wordix.Persistence.Services;
 using UnitOfWorkImplementation = Wordix.Persistence.UnitOfWork.UnitOfWork;
 
 namespace Wordix.Persistence.DependencyInjection;
@@ -52,6 +54,15 @@ public static class PersistenceServiceRegistration
             options.UseSqlServer(connectionString);
         });
 
+
+        // Reference data cache kaydı.
+        //
+        // Language gibi sık değişmeyen referans verileri memory cache üzerinden çözmek için kullanılır.
+        // IMemoryCache şu an local/prototype için yeterlidir.
+        // İleride Redis'e geçilirse Application katmanı değişmeden resolver implementasyonu değiştirilebilir.
+        services.AddMemoryCache();
+
+
         // Generic repository kaydı.
         //
         // typeof(IRepository<>) açık generic interface'i temsil eder.
@@ -82,6 +93,15 @@ public static class PersistenceServiceRegistration
         services.AddScoped<IUserLearningItemRepository, UserLearningItemRepository>();
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddScoped<IQuizRepository, QuizRepository>();
+
+        // Dil çözümleme servisi.
+        //
+        // Application katmanı ILanguageResolver ister.
+        // Persistence katmanı cache destekli CachedLanguageResolver implementasyonunu verir.
+        //
+        // Böylece handler'lar Language tablosuna doğrudan gitmez;
+        // dil çözme ve cacheleme sorumluluğu tek yerde toplanır.
+        services.AddScoped<ILanguageResolver, CachedLanguageResolver>();
 
         return services;
     }

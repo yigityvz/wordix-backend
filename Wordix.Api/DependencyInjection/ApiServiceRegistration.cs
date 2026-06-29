@@ -17,9 +17,22 @@ public static class ApiServiceRegistration
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddControllers();
+        services.AddControllers(options =>
+        {
+            // Empty JSON body geldiğinde ASP.NET Core'un action'a girmeden
+            // otomatik model binding hatası üretmesini istemiyoruz.
+            //
+            // Bizim validation standardımız:
+            // Controller -> Mapper -> Command/Query -> ValidationBehavior -> FluentValidation
+            //
+            // Bu ayar sayesinde boş body null olarak action'a geçebilir.
+            // Mapper null request'i default command'e çevirir.
+            // Validator eksik alanları standart VALIDATION_ERROR formatında döner.
+            options.AllowEmptyInputInBodyModelBinding = true;
+        });
 
-        services.AddWordixSwagger();
+#warning Swagger UI production ortamında kapatılmalıdır. Bu uyarıyı dikkate alınız.
+        services.AddWordixSwagger(); 
 
         services.AddWordixJwtAuthentication(configuration);
 

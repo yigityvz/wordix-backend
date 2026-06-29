@@ -355,7 +355,7 @@ public sealed class SubmitQuizAnswerCommandHandler
         bool isCorrect)
     {
         var aliases = isCorrect
-            ? new[] { "Correct", "Right", "Success" }
+            ? ["Correct", "Right", "Success"]
             : new[] { "Wrong", "Incorrect", "False", "Failed" };
 
         foreach (var alias in aliases)

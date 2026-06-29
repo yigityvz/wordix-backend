@@ -21,21 +21,21 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// 
     /// İlk prototipte sadece Test desteklenir.
     /// </summary>
-    public string QuizType { get; init; } = "Test";
+    public string QuizType { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz sorularının kaynağıdır.
     /// 
     /// İlk prototipte sadece Dictionary desteklenir.
     /// </summary>
-    public string QuizSourceType { get; init; } = "Dictionary";
+    public string QuizSourceType { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz içerik modudur.
     /// 
     /// İlk prototipte sadece WordsOnly desteklenir.
     /// </summary>
-    public string QuizContentMode { get; init; } = "WordsOnly";
+    public string QuizContentMode { get; init; } = string.Empty;
 
     /// <summary>
     /// Kullanıcının istediği soru sayısıdır.

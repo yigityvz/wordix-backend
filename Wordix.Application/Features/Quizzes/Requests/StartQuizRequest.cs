@@ -27,7 +27,7 @@ public sealed class StartQuizRequest
     /// İlk prototipte sadece Test desteklenir.
     /// İleride Flashcard, Writing, Listening gibi quiz türleri eklenebilir.
     /// </summary>
-    public string QuizType { get; init; } = "Test";
+    public string QuizType { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz sorularının hangi kaynaktan üretileceğini belirtir.
@@ -36,7 +36,7 @@ public sealed class StartQuizRequest
     /// Bu yüzden desteklenen değer:
     /// Dictionary
     /// </summary>
-    public string QuizSourceType { get; init; } = "Dictionary";
+    public string QuizSourceType { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz içinde hangi içerik türünün kullanılacağını belirtir.
@@ -45,7 +45,7 @@ public sealed class StartQuizRequest
     /// Bu yüzden desteklenen değer:
     /// WordsOnly
     /// </summary>
-    public string QuizContentMode { get; init; } = "WordsOnly";
+    public string QuizContentMode { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz içinde kaç soru üretileceğini belirtir.

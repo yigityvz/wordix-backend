@@ -2,10 +2,13 @@
 using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
+using Wordix.Application.Common.Models.Identity;
 using Wordix.Application.Common.Models.Persistence;
 using Wordix.Application.Features.Lookups.Models;
 using Wordix.Application.Features.Lookups.Responses;
 using Wordix.Application.Features.Lookups.Services;
+using Wordix.Application.Common.Interfaces.Localization;
+using Wordix.Application.Common.Models.Localization;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
 
@@ -44,13 +47,12 @@ public sealed class CreateLookupCommandHandler
     private readonly IDictionaryProvider _dictionaryProvider;
     private readonly ILearningItemRepository _learningItemRepository;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
-    private readonly IRepository<Language> _languageRepository;
+    private readonly ILanguageResolver _languageResolver;
     private readonly IRepository<LearningItem> _learningItemGenericRepository;
     private readonly IRepository<Word> _wordRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<LookupHistory> _lookupHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
-
     /// <summary>
     /// Handler ihtiyacı olan tüm application/persistence abstraction'larını DI üzerinden alır.
     /// 
@@ -67,7 +69,7 @@ public sealed class CreateLookupCommandHandler
         IDictionaryProvider dictionaryProvider,
         ILearningItemRepository learningItemRepository,
         IUserLearningItemRepository userLearningItemRepository,
-        IRepository<Language> languageRepository,
+        ILanguageResolver languageResolver,
         IRepository<LearningItem> learningItemGenericRepository,
         IRepository<Word> wordRepository,
         IRepository<Meaning> meaningRepository,
@@ -80,7 +82,7 @@ public sealed class CreateLookupCommandHandler
         _dictionaryProvider = dictionaryProvider;
         _learningItemRepository = learningItemRepository;
         _userLearningItemRepository = userLearningItemRepository;
-        _languageRepository = languageRepository;
+        _languageResolver = languageResolver;
         _learningItemGenericRepository = learningItemGenericRepository;
         _wordRepository = wordRepository;
         _meaningRepository = meaningRepository;
@@ -105,13 +107,16 @@ public sealed class CreateLookupCommandHandler
         // " Achieve " → "achieve"
         var normalizedText = _textNormalizer.Normalize(request.Text);
 
-        // 3. Source ve target language kayıtlarını database'den buluyoruz.
-        // Dil bilgilerini hard-coded Guid ile kullanmıyoruz.
-        var sourceLanguage = await GetRequiredLanguageAsync(
+        // 3. Source ve target language bilgilerini merkezi resolver üzerinden çözüyoruz.
+        //
+        // Handler artık language repository/cache detayını bilmez.
+        // ILanguageResolver implementasyonu önce cache'e bakar,
+        // cache'te yoksa database'den aktif Language kaydını çözer.
+        var sourceLanguage = await _languageResolver.GetRequiredActiveLanguageByCodeAsync(
             request.SourceLanguageCode,
             cancellationToken);
 
-        var targetLanguage = await GetRequiredLanguageAsync(
+        var targetLanguage = await _languageResolver.GetRequiredActiveLanguageByCodeAsync(
             request.TargetLanguageCode,
             cancellationToken);
 
@@ -189,39 +194,19 @@ public sealed class CreateLookupCommandHandler
             cancellationToken: cancellationToken);
     }
 
-    /// <summary>
-    /// Verilen language code'a göre aktif Language kaydını bulur.
-    /// Bulamazsa NotFoundException fırlatır.
-    /// </summary>
-    private async Task<Language> GetRequiredLanguageAsync(
-        string languageCode,
-        CancellationToken cancellationToken)
-    {
-        var normalizedLanguageCode = languageCode.Trim().ToLowerInvariant();
 
-        var language = await _languageRepository.FirstOrDefaultAsync(
-            language => language.Code == normalizedLanguageCode && language.IsActive,
-            cancellationToken);
-
-        if (language is null)
-        {
-            throw new NotFoundException("Language", normalizedLanguageCode);
-        }
-
-        return language;
-    }
 
     /// <summary>
     /// Database'de bulunan kelime için LookupHistory oluşturur ve LookupResponse döner.
     /// </summary>
     private async Task<LookupResponse> HandleDatabaseLookupResultAsync(
-        Guid userProfileId,
-        CreateLookupCommand request,
-        string normalizedText,
-        Language sourceLanguage,
-        Language targetLanguage,
-        WordLookupData databaseLookupData,
-        CancellationToken cancellationToken)
+    Guid userProfileId,
+    CreateLookupCommand request,
+    string normalizedText,
+    LanguageLookupData sourceLanguage,
+    LanguageLookupData targetLanguage,
+    WordLookupData databaseLookupData,
+    CancellationToken cancellationToken)
     {
         var resultCount = databaseLookupData.Meanings.Count;
 
@@ -267,13 +252,13 @@ public sealed class CreateLookupCommandHandler
     /// Provider'dan bulunan kelime için LearningItem + Word + Meaning + LookupHistory oluşturur.
     /// </summary>
     private async Task<LookupResponse> HandleProviderLookupResultAsync(
-        Guid userProfileId,
-        CreateLookupCommand request,
-        string normalizedText,
-        Language sourceLanguage,
-        Language targetLanguage,
-        DictionaryProviderResult providerResult,
-        CancellationToken cancellationToken)
+    Guid userProfileId,
+    CreateLookupCommand request,
+    string normalizedText,
+    LanguageLookupData sourceLanguage,
+    LanguageLookupData targetLanguage,
+    DictionaryProviderResult providerResult,
+    CancellationToken cancellationToken)
     {
         // İlk prototype provider'da CEFR/Difficulty otomatik tespit etmiyoruz.
         // Faz 24 import/provider sisteminde bu konu detaylandırılacak.
