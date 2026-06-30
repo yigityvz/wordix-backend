@@ -10,6 +10,11 @@ namespace Wordix.Persistence.Configurations;
 /// 
 /// QuizAnswer, kullanıcının bir quiz sorusuna verdiği cevabı temsil eder.
 /// Cevabın doğru/yanlış sonucu, cevap metni ve cevap süresi burada tutulur.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile tablosu üzerinden kullanıcı sahipliği kurmaz.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - QuizAnswers tablosu cevabı veren kullanıcıyı doğrudan KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class QuizAnswerConfiguration : IEntityTypeConfiguration<QuizAnswer>
 {
@@ -25,7 +30,11 @@ public class QuizAnswerConfiguration : IEntityTypeConfiguration<QuizAnswer>
         builder.Property(answer => answer.QuizQuestionId)
             .IsRequired();
 
-        builder.Property(answer => answer.UserProfileId)
+        // KeycloakUserId, JWT token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+        // Backend bu kullanıcı için ayrıca UserProfileId/UserId üretmez.
+        // Bu alan dış identity provider id'si olduğu için string olarak tutulur.
+        builder.Property(answer => answer.KeycloakUserId)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(answer => answer.SelectedQuizOptionId)
@@ -56,12 +65,16 @@ public class QuizAnswerConfiguration : IEntityTypeConfiguration<QuizAnswer>
         builder.HasIndex(answer => answer.QuizQuestionId);
 
         // Kullanıcının cevap geçmişini analiz etmek için kullanılır.
-        builder.HasIndex(answer => answer.UserProfileId);
+        // Eski yapı UserProfileId ile çalışıyordu.
+        // Yeni yapı KeycloakUserId ile çalışır.
+        builder.HasIndex(answer => answer.KeycloakUserId);
 
         // Kullanıcının zaman içindeki cevaplarını analiz etmek için faydalı index.
+        // Örnek sorgu:
+        // WHERE KeycloakUserId = '...' ORDER BY AnsweredAt DESC
         builder.HasIndex(answer => new
         {
-            answer.UserProfileId,
+            answer.KeycloakUserId,
             answer.AnsweredAt
         });
 
@@ -76,13 +89,10 @@ public class QuizAnswerConfiguration : IEntityTypeConfiguration<QuizAnswer>
             .HasForeignKey(answer => answer.QuizQuestionId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Cevabı veren kullanıcıdır.
-        // Kullanıcı fiziksel silinirse cevapların otomatik silinmesini istemiyoruz.
-        // Analytics geçmişi korunmalı.
-        builder.HasOne<UserProfile>()
-            .WithMany()
-            .HasForeignKey(answer => answer.UserProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Önemli:
+        // Burada artık UserProfile foreign key ilişkisi yok.
+        // Çünkü Keycloak kullanıcısı bizim SQL database'imizde bir tablo olarak tutulmuyor.
+        // KeycloakUserId dış identity provider id'si olarak saklanır.
 
         // Test quizlerde seçilen option bilgisidir.
         // Writing quizlerde null olabilir.

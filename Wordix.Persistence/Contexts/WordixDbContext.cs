@@ -34,12 +34,11 @@ public class WordixDbContext : DbContext
     }
 
     /// <summary>
-    /// Keycloak kullanıcısının Wordix tarafındaki profil karşılığıdır.
-    /// </summary>
-    public DbSet<UserProfile> UserProfiles => Set<UserProfile>();
-
-    /// <summary>
-    /// Kullanıcının quiz, öneri ve motivasyon gibi uygulama tercihlerini tutar.
+    /// Kullanıcının quiz, öneri, motivasyon ve uygulama tercihlerini tutar.
+    /// 
+    /// Önemli:
+    /// UserPreference artık UserProfileId üzerinden değil,
+    /// Keycloak token içindeki "sub" claiminden gelen KeycloakUserId üzerinden kullanıcıya bağlanacaktır.
     /// </summary>
     public DbSet<UserPreference> UserPreferences => Set<UserPreference>();
 

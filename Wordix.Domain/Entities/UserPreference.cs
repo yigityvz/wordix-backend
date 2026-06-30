@@ -6,14 +6,24 @@ namespace Wordix.Domain.Entities;
 /// <summary>
 /// Kullanıcının uygulama içi tercihlerini tutar.
 /// 
-/// UserProfile kimlik/profil bilgisini temsil eder.
-/// UserPreference ise quiz, öneri ve motivasyon gibi kişiselleştirme ayarlarını temsil eder.
+/// Bu entity kimlik/profil bilgisi tutmaz.
+/// Kimlik yönetimi Keycloak tarafındadır.
+/// 
+/// UserPreference; quiz, öneri, motivasyon ve ileride kullanıcı ekranından değiştirilebilecek
+/// kişiselleştirme ayarlarını temsil eder.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Kullanıcı tercihleri token içindeki "sub" claiminden gelen KeycloakUserId ile kullanıcıya bağlanır.
 /// </summary>
 public class UserPreference : AuditableEntity
 {
-
     /// <summary>
     /// EF Core için protected constructor.
+    /// 
+    /// EF Core database'den kayıt okurken bu constructor'ı kullanabilir.
+    /// Dışarıdan boş UserPreference oluşturulmasını istemediğimiz için protected bırakıyoruz.
     /// </summary>
     protected UserPreference()
     {
@@ -22,22 +32,34 @@ public class UserPreference : AuditableEntity
     /// <summary>
     /// Yeni kullanıcı için varsayılan tercih kaydı oluşturur.
     /// 
-    /// Bu kayıt genelde UserProfile ilk oluşturulduğunda beraber oluşturulur.
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelir.
+    /// - Bu preference kaydının hangi Keycloak kullanıcısına ait olduğunu belirtir.
+    /// - Backend tarafından üretilen UserProfileId değildir.
+    /// 
+    /// Not:
+    /// Bu kayıt artık /api/profile/me çağrısında otomatik oluşturulmaz.
+    /// İleride preference endpointleri geldiğinde kullanıcı ayarları ilk kez okunurken
+    /// veya güncellenirken oluşturulabilir.
     /// </summary>
-    public UserPreference(Guid userProfileId)
+    public UserPreference(string keycloakUserId)
     {
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
-            throw new ArgumentException("UserProfileId boş Guid olamaz.", nameof(userProfileId));
+            throw new ArgumentException("KeycloakUserId boş olamaz.", nameof(keycloakUserId));
         }
 
-        UserProfileId = userProfileId;
+        KeycloakUserId = keycloakUserId.Trim();
     }
 
     /// <summary>
-    /// Bu tercih kaydının hangi kullanıcıya ait olduğunu gösterir.
+    /// Bu tercih kaydının ait olduğu Keycloak kullanıcısının id değeridir.
+    /// 
+    /// Bu değer JWT token içindeki "sub" claiminden gelir.
+    /// Wordix backend ayrıca UserProfileId/UserId üretmediği için
+    /// kullanıcı tercihleri bu alan üzerinden filtrelenir.
     /// </summary>
-    public Guid UserProfileId { get; private set; }
+    public string KeycloakUserId { get; private set; } = string.Empty;
 
     /// <summary>
     /// Kullanıcının varsayılan quiz tipi.
@@ -69,7 +91,6 @@ public class UserPreference : AuditableEntity
     /// Kullanıcının varsayılan quiz soru sayısı tercihidir.
     /// </summary>
     public int PreferredQuestionCount { get; private set; } = 10;
-
 
     /// <summary>
     /// Kullanıcının varsayılan quiz ayarlarını günceller.

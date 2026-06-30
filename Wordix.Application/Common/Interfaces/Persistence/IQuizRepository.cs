@@ -13,6 +13,11 @@ namespace Wordix.Application.Common.Interfaces.Persistence;
 /// 
 /// Bu yüzden quiz'e özel sorguları generic repository içinde dağıtmak yerine
 /// IQuizRepository altında topluyoruz.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfileId/UserId üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Quiz ownership kontrolleri token içindeki "sub" claiminden gelen KeycloakUserId ile yapılır.
 /// </summary>
 public interface IQuizRepository
 {
@@ -21,10 +26,15 @@ public interface IQuizRepository
     /// 
     /// Bu method ownership kontrolü için önemlidir.
     /// Kullanıcı başkasının quiz session'ına erişmemelidir.
+    /// 
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+    /// - Eski UserProfileId yerine kullanılır.
+    /// - Backend tarafından üretilmez.
     /// </summary>
     Task<QuizSession?> GetSessionByIdForUserAsync(
         Guid quizSessionId,
-        Guid userProfileId,
+        string keycloakUserId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -57,9 +67,11 @@ public interface IQuizRepository
     /// Kullanıcı belirli bir quiz sorusuna daha önce cevap vermiş mi kontrol eder.
     /// 
     /// Aynı soruya birden fazla cevap verilmesini engellemek için kullanılabilir.
+    /// 
+    /// Yeni mimaride kullanıcı filtresi UserProfileId ile değil, KeycloakUserId ile yapılır.
     /// </summary>
     Task<bool> HasAnswerForQuestionAsync(
         Guid quizQuestionId,
-        Guid userProfileId,
+        string keycloakUserId,
         CancellationToken cancellationToken = default);
 }

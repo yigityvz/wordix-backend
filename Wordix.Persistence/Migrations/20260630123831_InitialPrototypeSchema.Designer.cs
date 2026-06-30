@@ -12,7 +12,7 @@ using Wordix.Persistence.Contexts;
 namespace Wordix.Persistence.Migrations
 {
     [DbContext(typeof(WordixDbContext))]
-    [Migration("20260623133238_InitialPrototypeSchema")]
+    [Migration("20260630123831_InitialPrototypeSchema")]
     partial class InitialPrototypeSchema
     {
         /// <inheritdoc />
@@ -205,6 +205,11 @@ namespace Wordix.Persistence.Migrations
                     b.Property<int>("InputType")
                         .HasColumnType("int");
 
+                    b.Property<string>("KeycloakUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<Guid?>("LearningItemId")
                         .HasColumnType("uniqueidentifier");
 
@@ -237,9 +242,6 @@ namespace Wordix.Persistence.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("UserProfileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.Property<bool>("WasCreatedFromProvider")
                         .HasColumnType("bit");
 
@@ -250,6 +252,8 @@ namespace Wordix.Persistence.Migrations
 
                     b.HasIndex("InputType");
 
+                    b.HasIndex("KeycloakUserId");
+
                     b.HasIndex("LearningItemId");
 
                     b.HasIndex("NormalizedQueryText");
@@ -259,8 +263,6 @@ namespace Wordix.Persistence.Migrations
                     b.HasIndex("SourceLanguageId");
 
                     b.HasIndex("TargetLanguageId");
-
-                    b.HasIndex("UserProfileId");
 
                     b.ToTable("LookupHistories", (string)null);
                 });
@@ -376,6 +378,11 @@ namespace Wordix.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("KeycloakUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<Guid>("QuizQuestionId")
                         .HasColumnType("uniqueidentifier");
 
@@ -389,20 +396,17 @@ namespace Wordix.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
-                    b.Property<Guid>("UserProfileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("AnswerResult");
+
+                    b.HasIndex("KeycloakUserId");
 
                     b.HasIndex("QuizQuestionId");
 
                     b.HasIndex("SelectedQuizOptionId");
 
-                    b.HasIndex("UserProfileId");
-
-                    b.HasIndex("UserProfileId", "AnsweredAt");
+                    b.HasIndex("KeycloakUserId", "AnsweredAt");
 
                     b.ToTable("QuizAnswers", (string)null);
                 });
@@ -502,6 +506,11 @@ namespace Wordix.Persistence.Migrations
                     b.Property<bool>("IncludeSystemRecommendations")
                         .HasColumnType("bit");
 
+                    b.Property<string>("KeycloakUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<int>("QuestionCount")
                         .HasColumnType("int");
 
@@ -523,16 +532,13 @@ namespace Wordix.Persistence.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("UserProfileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
+
+                    b.HasIndex("KeycloakUserId");
 
                     b.HasIndex("Status");
 
-                    b.HasIndex("UserProfileId");
-
-                    b.HasIndex("UserProfileId", "StartedAt");
+                    b.HasIndex("KeycloakUserId", "StartedAt");
 
                     b.ToTable("QuizSessions", (string)null);
                 });
@@ -547,6 +553,11 @@ namespace Wordix.Persistence.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<string>("KeycloakUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid>("LearningItemId")
                         .HasColumnType("uniqueidentifier");
@@ -563,9 +574,6 @@ namespace Wordix.Persistence.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("UserProfileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
 
                     b.HasIndex("LearningItemId");
@@ -574,9 +582,9 @@ namespace Wordix.Persistence.Migrations
 
                     b.HasIndex("SourceLookupHistoryId");
 
-                    b.HasIndex("UserProfileId", "IsActive");
+                    b.HasIndex("KeycloakUserId", "IsActive");
 
-                    b.HasIndex("UserProfileId", "LearningItemId")
+                    b.HasIndex("KeycloakUserId", "LearningItemId")
                         .IsUnique();
 
                     b.ToTable("UserLearningItems", (string)null);
@@ -652,6 +660,11 @@ namespace Wordix.Persistence.Migrations
                     b.Property<bool>("IncludeSystemRecommendations")
                         .HasColumnType("bit");
 
+                    b.Property<string>("KeycloakUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("MotivationMessagesEnabled")
                         .HasColumnType("bit");
 
@@ -661,74 +674,12 @@ namespace Wordix.Persistence.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("datetime2");
 
-                    b.Property<Guid>("UserProfileId")
-                        .HasColumnType("uniqueidentifier");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("UserProfileId")
-                        .IsUnique();
-
-                    b.ToTable("UserPreferences", (string)null);
-                });
-
-            modelBuilder.Entity("Wordix.Domain.Entities.UserProfile", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("AccountType")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("DisplayName")
-                        .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
-
-                    b.Property<string>("Email")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("nvarchar(256)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("KeycloakUserId")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<Guid?>("NativeLanguageId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("TargetLanguageId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Username")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Email")
-                        .IsUnique();
 
                     b.HasIndex("KeycloakUserId")
                         .IsUnique();
 
-                    b.HasIndex("NativeLanguageId");
-
-                    b.HasIndex("TargetLanguageId");
-
-                    b.HasIndex("Username");
-
-                    b.ToTable("UserProfiles", (string)null);
+                    b.ToTable("UserPreferences", (string)null);
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.Word", b =>
@@ -838,12 +789,6 @@ namespace Wordix.Persistence.Migrations
                         .HasForeignKey("TargetLanguageId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
-
-                    b.HasOne("Wordix.Domain.Entities.UserProfile", null)
-                        .WithMany()
-                        .HasForeignKey("UserProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.Meaning", b =>
@@ -873,12 +818,6 @@ namespace Wordix.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SelectedQuizOptionId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Wordix.Domain.Entities.UserProfile", null)
-                        .WithMany()
-                        .HasForeignKey("UserProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.QuizOption", b =>
@@ -905,15 +844,6 @@ namespace Wordix.Persistence.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Wordix.Domain.Entities.QuizSession", b =>
-                {
-                    b.HasOne("Wordix.Domain.Entities.UserProfile", null)
-                        .WithMany()
-                        .HasForeignKey("UserProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("Wordix.Domain.Entities.UserLearningItem", b =>
                 {
                     b.HasOne("Wordix.Domain.Entities.LearningItem", null)
@@ -931,12 +861,6 @@ namespace Wordix.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("SourceLookupHistoryId")
                         .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Wordix.Domain.Entities.UserProfile", null)
-                        .WithMany()
-                        .HasForeignKey("UserProfileId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.UserLearningProgress", b =>
@@ -946,28 +870,6 @@ namespace Wordix.Persistence.Migrations
                         .HasForeignKey("Wordix.Domain.Entities.UserLearningProgress", "UserLearningItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-                });
-
-            modelBuilder.Entity("Wordix.Domain.Entities.UserPreference", b =>
-                {
-                    b.HasOne("Wordix.Domain.Entities.UserProfile", null)
-                        .WithOne()
-                        .HasForeignKey("Wordix.Domain.Entities.UserPreference", "UserProfileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("Wordix.Domain.Entities.UserProfile", b =>
-                {
-                    b.HasOne("Wordix.Domain.Entities.Language", null)
-                        .WithMany()
-                        .HasForeignKey("NativeLanguageId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("Wordix.Domain.Entities.Language", null)
-                        .WithMany()
-                        .HasForeignKey("TargetLanguageId")
-                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.Word", b =>

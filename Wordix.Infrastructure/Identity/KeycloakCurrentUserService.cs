@@ -56,6 +56,9 @@ public sealed class KeycloakCurrentUserService : ICurrentUserService
     /// Keycloak tokenlarında kullanıcı id genellikle "sub" claimindedir.
     /// Bazı JWT mapping ayarlarında bu değer ClaimTypes.NameIdentifier olarak da gelebilir.
     /// Bu yüzden ikisini de kontrol ediyoruz.
+    /// 
+    /// Yeni mimaride bu değer Wordix kullanıcı sahipliği için ana referanstır.
+    /// Backend ayrıca UserProfileId/UserId üretmez.
     /// </summary>
     public string? KeycloakUserId =>
         FindFirstClaimValue("sub")
@@ -86,8 +89,8 @@ public sealed class KeycloakCurrentUserService : ICurrentUserService
     /// <summary>
     /// Kullanıcının rollerini döndürür.
     /// 
-    /// Faz 5'te realm_access.roles içindeki Keycloak rollerini ASP.NET Core'un anlayacağı
-    /// role claimlerine çevirmiştik.
+    /// realm_access.roles içindeki Keycloak rollerini JWT authentication aşamasında
+    /// ASP.NET Core'un anlayacağı role claimlerine çevirmiştik.
     /// 
     /// Yine de daha dayanıklı olması için birkaç olası role claim tipini kontrol ediyoruz:
     /// - ClaimTypes.Role
@@ -156,6 +159,37 @@ public sealed class KeycloakCurrentUserService : ICurrentUserService
             Roles = Roles,
             IsAuthenticated = IsAuthenticated
         };
+    }
+
+    /// <summary>
+    /// Authenticated kullanıcının Keycloak user id değerini zorunlu olarak döndürür.
+    /// 
+    /// Bu method özellikle kullanıcıya bağlı use-case'lerde kullanılacak:
+    /// - Lookup history
+    /// - User dictionary
+    /// - Quiz session
+    /// - Quiz answer
+    /// - Learning progress
+    /// 
+    /// Yeni mimari kararımıza göre handlerlar artık UserProfile.Id almayacak.
+    /// Bunun yerine doğrudan token içindeki KeycloakUserId değerini kullanacak.
+    /// 
+    /// Bu method Keycloak'a istek atmaz.
+    /// Sadece JWT middleware tarafından doğrulanmış token claimlerini HttpContext.User üzerinden okur.
+    /// </summary>
+    public string GetRequiredKeycloakUserId()
+    {
+        if (!IsAuthenticated)
+        {
+            throw new UnauthorizedAccessException("User is not authenticated.");
+        }
+
+        if (string.IsNullOrWhiteSpace(KeycloakUserId))
+        {
+            throw new UnauthorizedAccessException("Keycloak user id could not be read from token.");
+        }
+
+        return KeycloakUserId.Trim();
     }
 
     /// <summary>

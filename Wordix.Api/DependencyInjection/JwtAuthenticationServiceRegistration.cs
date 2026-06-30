@@ -6,8 +6,19 @@ using System.Text.Json;
 namespace Wordix.Api.DependencyInjection;
 
 /// <summary>
-/// Keycloak JWT authentication ayarlarını içerir.
-/// Program.cs içinde JWT detaylarının kalabalık oluşturmasını engeller.
+/// Wordix backend'in Keycloak tarafından üretilmiş JWT access tokenlarını
+/// doğrulamasını sağlayan authentication konfigürasyonudur.
+/// 
+/// Önemli mimari karar:
+/// - Login/register işlemleri backend tarafından yapılmaz.
+/// - Şifre doğrulama, email doğrulama, session ve token üretimi Keycloak tarafından yapılır.
+/// - Backend yalnızca mobil uygulamadan gelen Bearer token'ı doğrular.
+/// - Backend identity provider değildir; Keycloak token doğrulayan resource server olarak çalışır.
+/// 
+/// Wordix'te Keycloak yalnızca bu uygulama için kullanılacağı için
+/// roller realm role olarak yönetilir.
+/// Bu yüzden token içindeki realm_access.roles değeri okunur ve
+/// ASP.NET Core'un anlayacağı ClaimTypes.Role claimlerine dönüştürülür.
 /// </summary>
 public static class JwtAuthenticationServiceRegistration
 {

@@ -23,7 +23,10 @@ public interface ICurrentUserService
 
     /// <summary>
     /// Keycloak kullanıcı id değeridir.
-    /// Token içindeki "sub" claiminden okunur.
+    /// 
+    /// Bu değer JWT token içindeki "sub" claiminden okunur.
+    /// Yeni mimari kararımıza göre Wordix backend kullanıcıya ayrıca UserProfileId/UserId üretmez.
+    /// Kullanıcıya ait lookup, dictionary, quiz ve progress kayıtları bu KeycloakUserId ile ilişkilendirilir.
     /// </summary>
     string? KeycloakUserId { get; }
 
@@ -41,7 +44,9 @@ public interface ICurrentUserService
 
     /// <summary>
     /// Kullanıcının rolleridir.
-    /// Faz 5'te Keycloak realm_access.roles değerlerini ASP.NET Core role claimlerine çevirmiştik.
+    /// 
+    /// Keycloak realm_access.roles değerleri JWT authentication aşamasında
+    /// ASP.NET Core role claimlerine çevrilir.
     /// Bu servis o rolleri standart şekilde Application tarafına verir.
     /// </summary>
     IReadOnlyCollection<string> Roles { get; }
@@ -56,4 +61,16 @@ public interface ICurrentUserService
     /// Handler veya service tarafında birden fazla property taşımak yerine bu model kullanılabilir.
     /// </summary>
     CurrentUserInfo GetCurrentUser();
+
+    /// <summary>
+    /// Authenticated kullanıcının Keycloak user id değerini zorunlu olarak döndürür.
+    /// 
+    /// Neden bu metoda ihtiyaç var?
+    /// - Kullanıcıya bağlı use-case'lerde KeycloakUserId zorunludur.
+    /// - Her handler içinde tekrar tekrar null/auth kontrolü yazmak istemiyoruz.
+    /// - UserProfileId yerine artık doğrudan token içindeki KeycloakUserId kullanılacak.
+    /// 
+    /// Eğer kullanıcı authenticated değilse veya token içinde "sub" claimi yoksa exception fırlatır.
+    /// </summary>
+    string GetRequiredKeycloakUserId();
 }

@@ -9,12 +9,19 @@ namespace Wordix.Domain.Entities;
 /// Doğru/yanlış bilgisinin yanında cevap süresi de tutulur.
 /// Kullanıcıya ekranda süre sayacı gösterilmese bile,
 /// sistem arka planda cevap süresini öğrenme analitiği için kullanabilir.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfileId/UserId üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Bu entity, cevabı veren kullanıcıyı token içindeki "sub" claiminden gelen KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class QuizAnswer : BaseEntity
 {
-
     /// <summary>
     /// EF Core için protected constructor.
+    /// 
+    /// EF Core database'den kayıt okurken bu constructor'ı kullanabilir.
+    /// Dışarıdan boş QuizAnswer oluşturulmasını istemediğimiz için protected bırakıyoruz.
     /// </summary>
     protected QuizAnswer()
     {
@@ -22,10 +29,15 @@ public class QuizAnswer : BaseEntity
 
     /// <summary>
     /// Yeni quiz cevabı oluşturur.
+    /// 
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelir.
+    /// - Cevabı veren Keycloak kullanıcısını belirtir.
+    /// - Backend tarafından üretilen UserProfileId değildir.
     /// </summary>
     public QuizAnswer(
         Guid quizQuestionId,
-        Guid userProfileId,
+        string keycloakUserId,
         string correctAnswer,
         AnswerResult answerResult,
         int responseTimeMilliseconds,
@@ -38,9 +50,9 @@ public class QuizAnswer : BaseEntity
             throw new ArgumentException("QuizQuestionId boş Guid olamaz.", nameof(quizQuestionId));
         }
 
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
-            throw new ArgumentException("UserProfileId boş Guid olamaz.", nameof(userProfileId));
+            throw new ArgumentException("KeycloakUserId boş olamaz.", nameof(keycloakUserId));
         }
 
         if (string.IsNullOrWhiteSpace(correctAnswer))
@@ -54,7 +66,7 @@ public class QuizAnswer : BaseEntity
         }
 
         QuizQuestionId = quizQuestionId;
-        UserProfileId = userProfileId;
+        KeycloakUserId = keycloakUserId.Trim();
         SelectedQuizOptionId = selectedQuizOptionId;
         UserAnswer = string.IsNullOrWhiteSpace(userAnswer) ? null : userAnswer.Trim();
         CorrectAnswer = correctAnswer.Trim();
@@ -70,9 +82,13 @@ public class QuizAnswer : BaseEntity
     public Guid QuizQuestionId { get; private set; }
 
     /// <summary>
-    /// Cevabı veren kullanıcı profil Id'sidir.
+    /// Cevabı veren Keycloak kullanıcısının id değeridir.
+    /// 
+    /// Bu değer JWT token içindeki "sub" claiminden gelir.
+    /// Wordix backend ayrıca UserProfileId/UserId üretmediği için
+    /// kullanıcıya ait quiz cevapları bu alan üzerinden filtrelenir.
     /// </summary>
-    public Guid UserProfileId { get; private set; }
+    public string KeycloakUserId { get; private set; } = string.Empty;
 
     /// <summary>
     /// Test quizlerde kullanıcının seçtiği option Id'sidir.
@@ -133,8 +149,6 @@ public class QuizAnswer : BaseEntity
     /// Bu alan o işlemin gerçekleşip gerçekleşmediğini takip eder.
     /// </summary>
     public bool AddedToDictionaryBecauseWrong { get; private set; }
-
-    
 
     /// <summary>
     /// Sistem önerisi içerik yanlış bilindiği için dictionary'ye eklendiyse işaretler.

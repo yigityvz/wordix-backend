@@ -1,7 +1,18 @@
 ﻿namespace Wordix.Api.DependencyInjection;
 
 /// <summary>
-/// Wordix API authorization policy kayıtlarını içerir.
+/// Wordix API authorization policy tanımlarını içerir.
+/// 
+/// Roller Keycloak realm role olarak yönetilir.
+/// JwtAuthenticationServiceRegistration, token içindeki realm_access.roles değerlerini
+/// ASP.NET Core role claimlerine dönüştürdüğü için burada RequireRole kullanılabilir.
+/// 
+/// Örnek:
+/// - Keycloak realm role: admin
+/// - Backend policy: AdminOnly -> RequireRole("admin")
+/// 
+/// Bu yapı sayesinde backend kullanıcı rolünü kendi database'inden değil,
+/// Keycloak token'ındaki rol bilgisinden okur.
 /// </summary>
 public static class AuthorizationServiceRegistration
 {

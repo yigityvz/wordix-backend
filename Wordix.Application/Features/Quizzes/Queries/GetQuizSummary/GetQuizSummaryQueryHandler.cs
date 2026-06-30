@@ -12,13 +12,17 @@ namespace Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 /// GetQuizSummaryQuery isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - Current user'ın Wordix profilini alır.
-/// - QuizSession var mı kontrol eder.
-/// - QuizSession current user'a ait mi kontrol eder.
+/// - Current user'ın KeycloakUserId değerini alır.
+/// - QuizSession var mı ve current user'a ait mi kontrol eder.
 /// - QuizQuestion kayıtlarını çeker.
 /// - QuizAnswer kayıtlarını çeker.
 /// - Summary istatistiklerini hesaplar.
 /// - Soru bazlı summary listesi döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Quiz summary ownership kontrolü KeycloakUserId ile yapılır.
 /// 
 /// Bu handler ne yapmaz?
 /// - QuizAnswer oluşturmaz.
@@ -30,20 +34,27 @@ namespace Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 public sealed class GetQuizSummaryQueryHandler
     : IRequestHandler<GetQuizSummaryQuery, QuizSummaryResponse>
 {
-    private readonly IUserProfileSyncService _userProfileSyncService;
-    private readonly IRepository<QuizSession> _quizSessionRepository;
-    private readonly IRepository<QuizQuestion> _quizQuestionRepository;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IQuizRepository _quizRepository;
     private readonly IRepository<QuizAnswer> _quizAnswerRepository;
 
+    /// <summary>
+    /// Handler ihtiyacı olan servis ve repository abstraction'larını DI üzerinden alır.
+    /// 
+    /// Burada DbContext yok.
+    /// Burada HttpContext yok.
+    /// Burada controller yok.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden alınır.
+    /// Quiz session ownership kontrolü IQuizRepository üzerinden yapılır.
+    /// </summary>
     public GetQuizSummaryQueryHandler(
-        IUserProfileSyncService userProfileSyncService,
-        IRepository<QuizSession> quizSessionRepository,
-        IRepository<QuizQuestion> quizQuestionRepository,
+        ICurrentUserService currentUserService,
+        IQuizRepository quizRepository,
         IRepository<QuizAnswer> quizAnswerRepository)
     {
-        _userProfileSyncService = userProfileSyncService;
-        _quizSessionRepository = quizSessionRepository;
-        _quizQuestionRepository = quizQuestionRepository;
+        _currentUserService = currentUserService;
+        _quizRepository = quizRepository;
         _quizAnswerRepository = quizAnswerRepository;
     }
 
@@ -54,13 +65,29 @@ public sealed class GetQuizSummaryQueryHandler
         GetQuizSummaryQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user backend tarafında token üzerinden çözülür.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
-        // 2. QuizSession bulunur.
-        var quizSession = await _quizSessionRepository.FirstOrDefaultAsync(
-            session => session.Id == request.QuizSessionId,
+        // 2. QuizSession var mı ve current user'a ait mi kontrol ediyoruz.
+        //
+        // Eski yapı:
+        // QuizSession.UserProfileId == userProfile.Id
+        //
+        // Yeni yapı:
+        // QuizSession.KeycloakUserId == keycloakUserId
+        //
+        // Repository null dönerse iki ihtimal vardır:
+        // - Böyle bir QuizSession yoktur.
+        // - QuizSession vardır ama current user'a ait değildir.
+        //
+        // Güvenlik açısından ikisini de NotFound gibi davranmak kabul edilebilir.
+        // Böylece kullanıcı başka bir session id tahmin ettiğinde var/yok bilgisini öğrenemez.
+        var quizSession = await _quizRepository.GetSessionByIdForUserAsync(
+            request.QuizSessionId,
+            keycloakUserId,
             cancellationToken);
 
         if (quizSession is null)
@@ -70,16 +97,10 @@ public sealed class GetQuizSummaryQueryHandler
                 request.QuizSessionId);
         }
 
-        // 3. Kullanıcı sadece kendi quiz session summary'sini görebilir.
-        if (quizSession.UserProfileId != userProfile.Id)
-        {
-            throw new ForbiddenException(
-                "You cannot view another user's quiz summary.");
-        }
-
-        // 4. Bu session'a ait sorular çekilir.
-        var quizQuestions = await _quizQuestionRepository.ListAsync(
-            question => question.QuizSessionId == quizSession.Id,
+        // 3. Bu session'a ait sorular çekilir.
+        // Bu sorgu read-only olduğu için IQuizRepository tarafında AsNoTracking ile çalışır.
+        var quizQuestions = await _quizRepository.GetQuestionsBySessionAsync(
+            quizSession.Id,
             cancellationToken);
 
         var orderedQuestions = quizQuestions
@@ -95,10 +116,12 @@ public sealed class GetQuizSummaryQueryHandler
             .Select(question => question.Id)
             .ToArray();
 
-        // 5. Bu session sorularına verilmiş cevaplar çekilir.
+        // 4. Bu session sorularına current user tarafından verilmiş cevaplar çekilir.
+        //
         // QuizAnswer doğrudan QuizSessionId tutmadığı için QuizQuestionId üzerinden ilişki kuruyoruz.
+        // Yeni mimaride kullanıcı filtresi UserProfileId ile değil KeycloakUserId ile yapılır.
         var quizAnswers = await _quizAnswerRepository.ListAsync(
-            answer => answer.UserProfileId == userProfile.Id
+            answer => answer.KeycloakUserId == keycloakUserId
                       && questionIds.Contains(answer.QuizQuestionId),
             cancellationToken);
 
@@ -131,7 +154,7 @@ public sealed class GetQuizSummaryQueryHandler
             .Select(question => question.QuestionResponseTimeInMilliseconds!.Value)
             .ToArray();
 
-        #warning find someway for mapping 
+        // 5. Summary response hazırlanır.
         return new QuizSummaryResponse
         {
             QuizSessionId = quizSession.Id,
@@ -231,11 +254,28 @@ public sealed class GetQuizSummaryQueryHandler
             IsCorrect = IsCorrectAnswer(answer.AnswerResult),
             SelectedQuizOptionId = answer.SelectedQuizOptionId,
             SelectedAnswerText = answer.UserAnswer,
-            CorrectAnswerText = answer.CorrectAnswer ?? question.CorrectAnswer,
+            CorrectAnswerText = ResolveCorrectAnswerText(
+                answer,
+                question),
             QuestionResponseTimeInMilliseconds = NormalizeResponseTime(
                 answer.ResponseTimeMilliseconds),
             AnsweredAt = answer.AnsweredAt
         };
+    }
+
+    /// <summary>
+    /// Cevap kaydındaki doğru cevap snapshot değerini çözer.
+    /// 
+    /// Normalde QuizAnswer.CorrectAnswer dolu olmalıdır.
+    /// Defensive davranmak için boşsa QuizQuestion.CorrectAnswer değerine döneriz.
+    /// </summary>
+    private static string ResolveCorrectAnswerText(
+        QuizAnswer answer,
+        QuizQuestion question)
+    {
+        return string.IsNullOrWhiteSpace(answer.CorrectAnswer)
+            ? question.CorrectAnswer
+            : answer.CorrectAnswer;
     }
 
     /// <summary>

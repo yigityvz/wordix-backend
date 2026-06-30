@@ -14,6 +14,7 @@ namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 /// SubmitQuizAnswerCommand isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
+/// - Current user'ın KeycloakUserId değerini alır.
 /// - Current user'ın quiz session'a cevap verme yetkisini kontrol eder.
 /// - Seçilen quiz option'ın ilgili session içindeki bir question'a ait olup olmadığını doğrular.
 /// - Cevabı değerlendirir.
@@ -21,6 +22,11 @@ namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 /// - UserLearningProgress değerlerini günceller.
 /// - LearningProgressHistory kaydı oluşturur.
 /// - Response döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Quiz session, quiz answer ve dictionary ownership kontrolleri KeycloakUserId ile yapılır.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir use-case akışıdır.
@@ -30,8 +36,8 @@ namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 public sealed class SubmitQuizAnswerCommandHandler
     : IRequestHandler<SubmitQuizAnswerCommand, SubmitQuizAnswerResponse>
 {
-    private readonly IUserProfileSyncService _userProfileSyncService;
-    private readonly IRepository<QuizSession> _quizSessionRepository;
+    private readonly ICurrentUserService _currentUserService;
+    private readonly IQuizRepository _quizRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
     private readonly IRepository<QuizAnswer> _quizAnswerRepository;
@@ -50,10 +56,13 @@ public sealed class SubmitQuizAnswerCommandHandler
     /// Burada DbContext yok.
     /// Burada HttpContext yok.
     /// Burada controller logic'i yok.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden gelir.
+    /// Quiz ownership ve duplicate answer sorguları IQuizRepository üzerinden yapılır.
     /// </summary>
     public SubmitQuizAnswerCommandHandler(
-        IUserProfileSyncService userProfileSyncService,
-        IRepository<QuizSession> quizSessionRepository,
+        ICurrentUserService currentUserService,
+        IQuizRepository quizRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
         IRepository<QuizAnswer> quizAnswerRepository,
@@ -66,8 +75,8 @@ public sealed class SubmitQuizAnswerCommandHandler
         ILearningProgressUpdater learningProgressUpdater,
         IUnitOfWork unitOfWork)
     {
-        _userProfileSyncService = userProfileSyncService;
-        _quizSessionRepository = quizSessionRepository;
+        _currentUserService = currentUserService;
+        _quizRepository = quizRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
         _quizAnswerRepository = quizAnswerRepository;
@@ -88,14 +97,23 @@ public sealed class SubmitQuizAnswerCommandHandler
         SubmitQuizAnswerCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix profilini alıyoruz.
-        // UserProfileId client'tan alınmaz; token üzerinden backend'de çözülür.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // UserProfileId client'tan alınmaz.
+        // Backend burada UserProfile oluşturmaz.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
-        // 2. QuizSession var mı kontrol ediyoruz.
-        var quizSession = await _quizSessionRepository.FirstOrDefaultAsync(
-            session => session.Id == request.QuizSessionId,
+        // 2. QuizSession var mı ve current user'a ait mi kontrol ediyoruz.
+        //
+        // Eski yapı:
+        // QuizSession.UserProfileId == userProfile.Id
+        //
+        // Yeni yapı:
+        // QuizSession.KeycloakUserId == keycloakUserId
+        var quizSession = await _quizRepository.GetSessionByIdForUserAsync(
+            request.QuizSessionId,
+            keycloakUserId,
             cancellationToken);
 
         if (quizSession is null)
@@ -105,18 +123,10 @@ public sealed class SubmitQuizAnswerCommandHandler
                 request.QuizSessionId);
         }
 
-        // 3. Ownership kontrolü.
-        // Kullanıcı başka bir kullanıcının quiz session'ına cevap gönderemez.
-        if (quizSession.UserProfileId != userProfile.Id)
-        {
-            throw new ForbiddenException(
-                "You cannot submit an answer for another user's quiz session.");
-        }
-
-        // 4. Quiz session cevap kabul edebilir durumda mı?
+        // 3. Quiz session cevap kabul edebilir durumda mı?
         EnsureQuizSessionCanAcceptAnswer(quizSession);
 
-        // 5. Kullanıcının seçtiği option'ı buluyoruz.
+        // 4. Kullanıcının seçtiği option'ı buluyoruz.
         var selectedOption = await _quizOptionRepository.FirstOrDefaultAsync(
             option => option.Id == request.SelectedQuizOptionId,
             cancellationToken);
@@ -128,7 +138,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 request.SelectedQuizOptionId);
         }
 
-        // 6. Option'ın ait olduğu question'ı buluyoruz.
+        // 5. Option'ın ait olduğu question'ı buluyoruz.
         var quizQuestion = await _quizQuestionRepository.FirstOrDefaultAsync(
             question => question.Id == selectedOption.QuizQuestionId,
             cancellationToken);
@@ -140,7 +150,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 selectedOption.QuizQuestionId);
         }
 
-        // 7. Question route'taki quiz session'a mı ait?
+        // 6. Question route'taki quiz session'a mı ait?
         // Bu kontrol, başka session'daki option id'nin bu session'a gönderilmesini engeller.
         if (quizQuestion.QuizSessionId != quizSession.Id)
         {
@@ -149,21 +159,23 @@ public sealed class SubmitQuizAnswerCommandHandler
                 "SELECTED_OPTION_DOES_NOT_BELONG_TO_QUIZ_SESSION");
         }
 
-        // 8. Aynı soru daha önce cevaplanmış mı?
+        // 7. Aynı soru daha önce cevaplanmış mı?
         // İlk prototipte her QuizQuestion sadece bir kez cevaplanabilir.
-        var alreadyAnswered = await _quizAnswerRepository.FirstOrDefaultAsync(
-            answer => answer.QuizQuestionId == quizQuestion.Id
-                      && answer.UserProfileId == userProfile.Id,
+        //
+        // Yeni mimaride bu kontrol UserProfileId ile değil KeycloakUserId ile yapılır.
+        var alreadyAnswered = await _quizRepository.HasAnswerForQuestionAsync(
+            quizQuestion.Id,
+            keycloakUserId,
             cancellationToken);
 
-        if (alreadyAnswered is not null)
+        if (alreadyAnswered)
         {
             throw new BusinessRuleException(
                 "This quiz question has already been answered.",
                 "QUIZ_QUESTION_ALREADY_ANSWERED");
         }
 
-        // 9. Cevap değerlendirme request'i hazırlanır.
+        // 8. Cevap değerlendirme request'i hazırlanır.
         var evaluationRequest = new QuizAnswerEvaluationRequest
         {
             QuizSessionId = quizSession.Id,
@@ -175,34 +187,41 @@ public sealed class SubmitQuizAnswerCommandHandler
             QuestionResponseTimeInMilliseconds = request.QuestionResponseTimeInMilliseconds
         };
 
-        // 10. Doğru/yanlış değerlendirmesi ayrı servisle yapılır.
+        // 9. Doğru/yanlış değerlendirmesi ayrı servisle yapılır.
         var evaluationResult = _quizAnswerEvaluator.Evaluate(evaluationRequest);
 
-        // 11. QuizAnswer entity oluşturulur.
+        // 10. QuizAnswer entity oluşturulur.
         // Multiple choice quiz için:
         // - SelectedQuizOptionId doludur.
         // - UserAnswer olarak seçilen option text saklanır.
         // - CorrectAnswer quiz question üzerindeki doğru cevap metnidir.
         // - AnswerResult backend tarafından hesaplanır.
+        //
+        // Dikkat:
+        // Burada correctAnswer alanına doğru cevap metnini,
+        // userAnswer alanına kullanıcının seçtiği option metnini yazıyoruz.
         var answerResult = ResolveAnswerResult(evaluationResult.IsCorrect);
 
         var quizAnswer = new QuizAnswer(
             quizQuestion.Id,
-            userProfile.Id,
-            evaluationResult.SelectedOptionText,
+            keycloakUserId,
+            evaluationResult.CorrectAnswerText,
             answerResult,
             evaluationResult.QuestionResponseTimeInMilliseconds ?? 0,
             selectedOption.Id,
-            evaluationResult.CorrectAnswerText);
+            evaluationResult.SelectedOptionText);
 
         await _quizAnswerRepository.AddAsync(
             quizAnswer,
             cancellationToken);
 
-        // 12. Bu question hangi LearningItem'dan üretildiyse,
+        // 11. Bu question hangi LearningItem'dan üretildiyse,
         // current user'ın UserLearningItem kaydını buluyoruz.
+        //
+        // Yeni mimaride dictionary ownership kontrolü UserProfileId ile değil,
+        // KeycloakUserId ile yapılır.
         var userLearningItem = await _userLearningItemRepository.FirstOrDefaultAsync(
-            item => item.UserProfileId == userProfile.Id
+            item => item.KeycloakUserId == keycloakUserId
                     && item.LearningItemId == quizQuestion.LearningItemId
                     && item.IsActive,
             cancellationToken);
@@ -214,7 +233,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 "ANSWERED_ITEM_NOT_FOUND_IN_USER_DICTIONARY");
         }
 
-        // 13. UserLearningProgress kaydını buluyoruz.
+        // 12. UserLearningProgress kaydını buluyoruz.
         var userLearningProgress = await _userLearningProgressRepository.FirstOrDefaultAsync(
             progress => progress.UserLearningItemId == userLearningItem.Id,
             cancellationToken);
@@ -228,7 +247,7 @@ public sealed class SubmitQuizAnswerCommandHandler
 
         var reviewedAt = DateTimeOffset.UtcNow;
 
-        // 14. Confidence score hesaplanır.
+        // 13. Confidence score hesaplanır.
         var scoreCalculationResult = _learningScoreCalculator.Calculate(
             new LearningScoreCalculationRequest
             {
@@ -237,7 +256,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds
             });
 
-        // 15. Review schedule hesaplanır.
+        // 14. Review schedule hesaplanır.
         var reviewScheduleEvent = _reviewScheduleCalculator.Calculate(
             new ReviewScheduleCalculationRequest
             {
@@ -248,7 +267,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 ReviewedAt = reviewedAt
             });
 
-        // 16. Progress update sonucu hesaplanır.
+        // 15. Progress update sonucu hesaplanır.
         var progressUpdateResult = _learningProgressUpdater.CalculateUpdate(
             new LearningProgressUpdateRequest
             {
@@ -267,14 +286,14 @@ public sealed class SubmitQuizAnswerCommandHandler
                 ReviewedAt = reviewedAt
             });
 
-        // 17. Hesaplanan progress state'i domain entity'ye uygulanır.
+        // 16. Hesaplanan progress state'i domain entity'ye uygulanır.
         // Entity update işi burada yapılır, hesaplama logic'i ise servislerde kalır.
         ApplyProgressUpdate(
             userLearningProgress,
             progressUpdateResult,
             evaluationResult.IsCorrect);
 
-        // 18. Progress history oluşturulur.
+        // 17. Progress history oluşturulur.
         // Daha önce Faz 14'te kullandığımız constructor düzeniyle uyumludur.
         var progressHistory = new LearningProgressHistory(
             userLearningProgress.Id,
@@ -288,10 +307,10 @@ public sealed class SubmitQuizAnswerCommandHandler
             progressHistory,
             cancellationToken);
 
-        // 19. Tüm değişiklikler tek transaction/save akışında kaydedilir.
+        // 18. Tüm değişiklikler tek transaction/save akışında kaydedilir.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 20. Response hazırlanır.
+        // 19. Response hazırlanır.
         return new SubmitQuizAnswerResponse
         {
             QuizAnswerId = quizAnswer.Id,

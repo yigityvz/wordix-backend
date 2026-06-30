@@ -10,6 +10,11 @@ namespace Wordix.Persistence.Repositories;
 /// 
 /// QuizSession, QuizQuestion, QuizOption ve QuizAnswer entity'leriyle ilgili
 /// özel sorgular burada toplanır.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfileId/UserId üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Quiz sahiplik kontrolleri KeycloakUserId üzerinden yapılır.
 /// </summary>
 public class QuizRepository : IQuizRepository
 {
@@ -25,21 +30,29 @@ public class QuizRepository : IQuizRepository
     /// 
     /// Bu method ownership kontrolü için önemlidir.
     /// Kullanıcı başkasına ait quiz session'a erişmemelidir.
+    /// 
+    /// Eski yapı:
+    /// QuizSession.UserProfileId == userProfileId
+    /// 
+    /// Yeni yapı:
+    /// QuizSession.KeycloakUserId == keycloakUserId
     /// </summary>
     public async Task<QuizSession?> GetSessionByIdForUserAsync(
         Guid quizSessionId,
-        Guid userProfileId,
+        string keycloakUserId,
         CancellationToken cancellationToken = default)
     {
-        if (quizSessionId == Guid.Empty || userProfileId == Guid.Empty)
+        if (quizSessionId == Guid.Empty || string.IsNullOrWhiteSpace(keycloakUserId))
         {
             return null;
         }
 
+        var normalizedKeycloakUserId = keycloakUserId.Trim();
+
         return await _dbContext.QuizSessions
             .FirstOrDefaultAsync(session =>
                 session.Id == quizSessionId &&
-                session.UserProfileId == userProfileId,
+                session.KeycloakUserId == normalizedKeycloakUserId,
                 cancellationToken);
     }
 
@@ -103,29 +116,39 @@ public class QuizRepository : IQuizRepository
         }
 
         return await _dbContext.QuizOptions
-            .FirstOrDefaultAsync(option => option.Id == quizOptionId, cancellationToken);
+            .FirstOrDefaultAsync(
+                option => option.Id == quizOptionId,
+                cancellationToken);
     }
 
     /// <summary>
     /// Kullanıcı belirli bir soruya daha önce cevap vermiş mi kontrol eder.
     /// 
     /// Bu method aynı soruya ikinci kez cevap gönderilmesini engellemek için kullanılabilir.
+    /// 
+    /// Eski yapı:
+    /// QuizAnswer.UserProfileId == userProfileId
+    /// 
+    /// Yeni yapı:
+    /// QuizAnswer.KeycloakUserId == keycloakUserId
     /// </summary>
     public async Task<bool> HasAnswerForQuestionAsync(
         Guid quizQuestionId,
-        Guid userProfileId,
+        string keycloakUserId,
         CancellationToken cancellationToken = default)
     {
-        if (quizQuestionId == Guid.Empty || userProfileId == Guid.Empty)
+        if (quizQuestionId == Guid.Empty || string.IsNullOrWhiteSpace(keycloakUserId))
         {
             return false;
         }
+
+        var normalizedKeycloakUserId = keycloakUserId.Trim();
 
         return await _dbContext.QuizAnswers
             .AsNoTracking()
             .AnyAsync(answer =>
                 answer.QuizQuestionId == quizQuestionId &&
-                answer.UserProfileId == userProfileId,
+                answer.KeycloakUserId == normalizedKeycloakUserId,
                 cancellationToken);
     }
 }

@@ -2,8 +2,6 @@
 using MediatR;
 using Microsoft.Extensions.DependencyInjection;
 using Wordix.Application.Common.Behaviors;
-using Wordix.Application.Common.Interfaces.Identity;
-using Wordix.Application.Common.Services;
 using Wordix.Application.Features.Lookups.Services;
 using Wordix.Application.Features.Quizzes.Services;
 
@@ -50,9 +48,18 @@ public static class ApplicationServiceRegistration
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
-        // UserProfileSyncService application seviyesinde bir workflow servisidir.
-        // Current token kullanıcısını Wordix UserProfile kaydıyla eşleştirir.
-        services.AddScoped<IUserProfileSyncService, UserProfileSyncService>();
+        // Önemli:
+        // Eski mimaride burada ICurrentUserProfileService register ediliyordu.
+        // O servis token kullanıcısını Wordix UserProfile kaydıyla eşleştiriyor
+        // ve gerekirse UserProfile + UserPreference oluşturuyordu.
+        //
+        // Yeni mimaride backend artık UserProfileId/UserId üretmez.
+        // Kullanıcı sahipliği Keycloak token içindeki "sub" claiminden gelen
+        // KeycloakUserId ile yapılır.
+        //
+        // Bu yüzden ICurrentUserProfileService registration'ı kaldırıldı.
+        // Current user token bilgisi ICurrentUserService üzerinden okunur.
+        // ICurrentUserService implementation'ı API/Infrastructure tarafında register edilir.
 
         services.AddSingleton<ITextNormalizer, TextNormalizer>();
         services.AddSingleton<ILookupClassifier, LookupClassifier>();

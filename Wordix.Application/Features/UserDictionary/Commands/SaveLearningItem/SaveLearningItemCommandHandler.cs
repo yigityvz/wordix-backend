@@ -12,7 +12,7 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 /// SaveLearningItemCommand isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - Current user'ın UserProfile kaydını alır.
+/// - Current user'ın KeycloakUserId değerini alır.
 /// - Kaydedilecek LearningItem gerçekten var mı kontrol eder.
 /// - SelectedMeaningId gönderildiyse ilgili LearningItem'a ait mi kontrol eder.
 /// - SourceLookupHistoryId gönderildiyse current user'a ait mi kontrol eder.
@@ -21,6 +21,11 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 /// - UserLearningProgress oluşturur.
 /// - İlk kayıt olayını LearningProgressHistory olarak kayıt altına alır.
 /// - SaveLearningItemResponse döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Kullanıcı sahipliği token içindeki KeycloakUserId ile yapılır.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir use-case akışıdır.
@@ -32,7 +37,7 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 public sealed class SaveLearningItemCommandHandler
     : IRequestHandler<SaveLearningItemCommand, SaveLearningItemResponse>
 {
-    private readonly IUserProfileSyncService _userProfileSyncService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Meaning> _meaningRepository;
@@ -48,10 +53,12 @@ public sealed class SaveLearningItemCommandHandler
     /// Burada DbContext yok.
     /// Burada HttpContext yok.
     /// Burada controller yok.
-    /// Bu yapı Faz 9-13 arasında kurduğumuz mimariye uygun şekilde devam eder.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden alınır.
+    /// Bu servis Application katmanına sadece gerekli kullanıcı bilgisini sağlar.
     /// </summary>
     public SaveLearningItemCommandHandler(
-        IUserProfileSyncService userProfileSyncService,
+        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Meaning> meaningRepository,
@@ -61,7 +68,7 @@ public sealed class SaveLearningItemCommandHandler
         IRepository<LearningProgressHistory> learningProgressHistoryRepository,
         IUnitOfWork unitOfWork)
     {
-        _userProfileSyncService = userProfileSyncService;
+        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _meaningRepository = meaningRepository;
@@ -79,11 +86,12 @@ public sealed class SaveLearningItemCommandHandler
         SaveLearningItemCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix UserProfile kaydını alıyoruz.
-        // UserProfileSyncService daha önce Faz 11'de yazıldı.
-        // Kullanıcı ilk kez gelirse profil oluşturma sorumluluğu bu servistedir.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        // Kullanıcıya ait dictionary/progress/quiz gibi kayıtlar bu KeycloakUserId ile ilişkilendirilir.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // 2. Kaydedilecek LearningItem gerçekten var mı kontrol ediyoruz.
         var learningItem = await GetRequiredLearningItemAsync(
@@ -92,8 +100,9 @@ public sealed class SaveLearningItemCommandHandler
 
         // 3. Kullanıcı bu LearningItem'ı daha önce kaydetmiş mi kontrol ediyoruz.
         // Aynı kullanıcı aynı LearningItem'ı ikinci kez kaydedemez.
+        // Yeni mimaride duplicate kontrolü UserProfileId ile değil KeycloakUserId ile yapılır.
         var alreadySaved = await _userLearningItemRepository.ExistsByUserAndLearningItemAsync(
-            userProfile.Id,
+            keycloakUserId,
             learningItem.Id,
             cancellationToken);
 
@@ -120,20 +129,20 @@ public sealed class SaveLearningItemCommandHandler
         // Kullanıcı başkasının lookup history id'sini gönderip ilişki kuramamalı.
         await EnsureSourceLookupHistoryBelongsToCurrentUserAsync(
             request.SourceLookupHistoryId,
-            userProfile.Id,
+            keycloakUserId,
             cancellationToken);
 
         // 7. Kullanıcı dictionary kaydı oluşturuyoruz.
+        // UserLearningItem artık UserProfileId değil KeycloakUserId alır.
         var userLearningItem = new UserLearningItem(
-            userProfile.Id,
+            keycloakUserId,
             learningItem.Id,
             selectedMeaning?.Id,
             request.SourceLookupHistoryId);
 
-
         // 8. Kullanıcı öğrenme progress kaydını oluşturuyoruz.
         // Mevcut UserLearningProgress entity'si UserLearningItem üzerinden bire bir ilerler.
-        // Bu yüzden UserProfileId veya LearningItemId progress constructor'ına verilmez.
+        // Bu yüzden KeycloakUserId veya LearningItemId progress constructor'ına verilmez.
         var userLearningProgress = new UserLearningProgress(userLearningItem.Id);
 
         // 9. İlk kayıt olayını progress history olarak kayıt altına alıyoruz.
@@ -255,10 +264,13 @@ public sealed class SaveLearningItemCommandHandler
     /// Neden gerekli?
     /// Kullanıcı request body içine başka bir kullanıcının LookupHistoryId değerini koymamalı.
     /// Bu ownership kontrolüdür.
+    /// 
+    /// Yeni mimaride ownership kontrolü UserProfileId ile değil,
+    /// KeycloakUserId ile yapılır.
     /// </summary>
     private async Task EnsureSourceLookupHistoryBelongsToCurrentUserAsync(
         Guid? sourceLookupHistoryId,
-        Guid userProfileId,
+        string keycloakUserId,
         CancellationToken cancellationToken)
     {
         if (sourceLookupHistoryId is null)
@@ -275,7 +287,10 @@ public sealed class SaveLearningItemCommandHandler
             throw new NotFoundException("Lookup history", sourceLookupHistoryId.Value);
         }
 
-        if (lookupHistory.UserProfileId != userProfileId)
+        if (!string.Equals(
+                lookupHistory.KeycloakUserId,
+                keycloakUserId,
+                StringComparison.Ordinal))
         {
             throw new ForbiddenException(
                 "You cannot use another user's lookup history as save source.");

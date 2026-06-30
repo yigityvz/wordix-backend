@@ -1,24 +1,26 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Wordix.Application.Features.Profile.Queries.GetCurrentUserProfile;
+using Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
 using Wordix.Application.Features.Profile.Responses;
 using Wordix.Shared.Responses;
 
 namespace Wordix.Api.Controllers;
 
 /// <summary>
-/// Kullanıcının kendi profil bilgileriyle ilgili endpointleri yöneten controller.
+/// Kullanıcının authenticated token bilgileriyle ilgili endpointleri yöneten controller.
 /// 
-/// Bu controller artık iş mantığını doğrudan application service üzerinden çağırmaz.
-/// Bunun yerine MediatR üzerinden query gönderir.
+/// Bu controller login/register endpointi değildir.
+/// Kullanıcı kimlik doğrulaması Keycloak tarafından yapılır.
 /// 
-/// Akış:
-/// Controller
-/// → ISender.Send(query)
-/// → QueryHandler
-/// → Application service/repository
-/// → Response DTO
+/// Bu controller yalnızca geçerli Keycloak access token'ı ile gelen kullanıcının
+/// backend tarafından okunabilen token bilgilerini döndürür.
+/// 
+/// Önemli:
+/// - Bu endpoint UserProfile oluşturmaz.
+/// - Database'e gitmez.
+/// - UserPreference oluşturmaz.
+/// - Sadece doğrulanmış JWT token içindeki current user bilgilerini döndürür.
 /// </summary>
 [ApiController]
 [Route("api/profile")]
@@ -41,30 +43,42 @@ public sealed class ProfileController : ControllerBase
     }
 
     /// <summary>
-    /// O anki authenticated kullanıcının Wordix profilini döndürür.
+    /// O anki authenticated kullanıcının token bilgilerini döndürür.
     /// 
-    /// Akış:
+    /// Endpoint:
+    /// GET /api/profile/me
+    /// 
+    /// Bu endpoint login/register işlemi yapmaz.
+    /// Backend bu endpointte kullanıcı adı/şifre almaz.
+    /// Kullanıcı zaten Keycloak tarafından doğrulanmış ve backend'e access token ile gelmiştir.
+    /// 
+    /// Yeni akış:
     /// 1. Endpoint [Authorize] ile korunur.
-    /// 2. Controller GetCurrentUserProfileQuery oluşturur.
-    /// 3. Query MediatR'a gönderilir.
-    /// 4. GetCurrentUserProfileQueryHandler çalışır.
-    /// 5. Handler UserProfile sync işlemini yapar.
+    /// 2. JWT Bearer middleware Keycloak token'ını doğrular.
+    /// 3. Controller GetCurrentUserInfoQuery oluşturur.
+    /// 4. Query MediatR'a gönderilir.
+    /// 5. Handler ICurrentUserService üzerinden token claim bilgilerini okur.
     /// 6. Response DTO döner.
     /// 7. Controller standart ApiResponse formatında sonucu döner.
+    /// 
+    /// Bu endpointin amacı:
+    /// - Mobil uygulamanın "ben kimim?" bilgisini alması.
+    /// - Swagger/Postman testlerinde token claimlerinin doğru okunduğunu görmek.
+    /// - Role/email/username bilgisini frontend tarafına güvenli şekilde sunmak.
     /// </summary>
     [HttpGet("me")]
-    [ProducesResponseType(typeof(ApiResponse<CurrentUserProfileResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponse<CurrentUserInfoResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
-    public async Task<ActionResult<ApiResponse<CurrentUserProfileResponse>>> GetMe(
+    public async Task<ActionResult<ApiResponse<CurrentUserInfoResponse>>> GetMe(
         CancellationToken cancellationToken)
     {
         var response = await _sender.Send(
-            new GetCurrentUserProfileQuery(),
+            new GetCurrentUserInfoQuery(),
             cancellationToken);
 
-        return Ok(ApiResponse<CurrentUserProfileResponse>.Ok(
+        return Ok(ApiResponse<CurrentUserInfoResponse>.Ok(
             data: response,
-            message: "Current user profile retrieved successfully."));
+            message: "Current user information retrieved successfully."));
     }
 }

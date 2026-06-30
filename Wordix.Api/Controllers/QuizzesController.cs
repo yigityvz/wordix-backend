@@ -14,7 +14,7 @@ namespace Wordix.Api.Controllers;
 /// 
 /// Bu controller ne yapar?
 /// - Kullanıcının quiz başlatma isteğini alır.
-/// - HTTP request modelini Application command modeline manual map eder.
+/// - HTTP request modelini feature mapper üzerinden Application command modeline dönüştürür.
 /// - Command'i MediatR üzerinden ilgili handler'a gönderir.
 /// - Handler'dan gelen response'u standart ApiResponse formatında döner.
 /// 
@@ -65,7 +65,7 @@ public sealed class QuizzesController : ControllerBase
     /// 
     /// Akış:
     /// 1. Request body alınır.
-    /// 2. StartQuizCommand'e manual map edilir.
+    /// 2. StartQuizRequest, QuizMapper üzerinden StartQuizCommand'e dönüştürülür.
     /// 3. MediatR'a gönderilir.
     /// 4. ValidationBehavior çalışır.
     /// 5. StartQuizCommandHandler çalışır.

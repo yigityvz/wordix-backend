@@ -13,10 +13,10 @@
 public sealed class CurrentUserInfo
 {
     /// <summary>
-    /// Keycloak kullanıcısının benzersiz kullanıcı id değeridir.
+    /// Keycloak token içindeki "sub" claim değeridir.
     /// 
-    /// Keycloak token içinde genellikle "sub" claiminden okunur.
-    /// Wordix tarafındaki UserProfile.KeycloakUserId alanı ile eşleşir.
+    /// Yeni mimaride Wordix backend ayrıca UserProfileId/UserId üretmez.
+    /// Kullanıcıya bağlı Wordix kayıtları doğrudan bu KeycloakUserId değeriyle ilişkilendirilir.
     /// </summary>
     public string? KeycloakUserId { get; init; }
 

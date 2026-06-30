@@ -10,6 +10,11 @@ namespace Wordix.Persistence.Configurations;
 /// 
 /// UserLearningItem, kullanıcının kendi dictionary'sine kaydettiği LearningItem kayıtlarını tutar.
 /// Bu yapı sadece Word için değil, ileride Phrase ve Sentence için de çalışacaktır.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile tablosu üzerinden kullanıcı sahipliği kurmaz.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - UserLearningItems tablosu kullanıcıyı doğrudan KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class UserLearningItemConfiguration : IEntityTypeConfiguration<UserLearningItem>
 {
@@ -19,7 +24,11 @@ public class UserLearningItemConfiguration : IEntityTypeConfiguration<UserLearni
 
         builder.ConfigureAuditableEntity();
 
-        builder.Property(item => item.UserProfileId)
+        // KeycloakUserId, JWT token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+        // Backend bu kullanıcı için ayrıca UserProfileId/UserId üretmez.
+        // Bu alan dış identity provider id'si olduğu için string olarak tutulur.
+        builder.Property(item => item.KeycloakUserId)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(item => item.LearningItemId)
@@ -37,28 +46,32 @@ public class UserLearningItemConfiguration : IEntityTypeConfiguration<UserLearni
         builder.Property(item => item.IsActive)
             .IsRequired();
 
-        // Aynı kullanıcı aynı LearningItem'ı dictionary'ye iki kere ekleyemesin.
+        // Aynı Keycloak kullanıcısı aynı LearningItem'ı dictionary'ye iki kere ekleyemesin.
+        //
+        // Eski yapı:
+        // UserProfileId + LearningItemId
+        //
+        // Yeni yapı:
+        // KeycloakUserId + LearningItemId
         builder.HasIndex(item => new
         {
-            item.UserProfileId,
+            item.KeycloakUserId,
             item.LearningItemId
         })
             .IsUnique();
 
         // Kullanıcının aktif dictionary kayıtlarını listelemek için faydalı index.
+        // Dictionary ekranı bu index üzerinden hızlı filtreleme yapabilir.
         builder.HasIndex(item => new
         {
-            item.UserProfileId,
+            item.KeycloakUserId,
             item.IsActive
         });
 
-        // Kullanıcının dictionary kayıtları kullanıcı profiline bağlıdır.
-        // Kullanıcı fiziksel silinirse dictionary kayıtlarını otomatik silmek istemiyoruz.
-        // Öğrenme ve quiz geçmişi korunmalı.
-        builder.HasOne<UserProfile>()
-            .WithMany()
-            .HasForeignKey(item => item.UserProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Önemli:
+        // Burada artık UserProfile foreign key ilişkisi yok.
+        // Çünkü Keycloak kullanıcısı bizim SQL database'imizde bir tablo olarak tutulmuyor.
+        // KeycloakUserId dış identity provider id'si olarak saklanır.
 
         // Dictionary kaydı LearningItem'a bağlıdır.
         // LearningItem silinirse kullanıcının dictionary geçmişinin otomatik silinmesini istemiyoruz.

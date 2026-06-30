@@ -31,6 +31,49 @@ namespace Wordix.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "QuizSessions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    KeycloakUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    QuizType = table.Column<int>(type: "int", nullable: false),
+                    QuizSourceType = table.Column<int>(type: "int", nullable: false),
+                    QuizContentMode = table.Column<int>(type: "int", nullable: false),
+                    DifficultyGroup = table.Column<int>(type: "int", nullable: false),
+                    DeckId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    IncludeSystemRecommendations = table.Column<bool>(type: "bit", nullable: false),
+                    QuestionCount = table.Column<int>(type: "int", nullable: false),
+                    StartedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_QuizSessions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "UserPreferences",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    KeycloakUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    DefaultQuizType = table.Column<int>(type: "int", nullable: false),
+                    DefaultDifficultyGroup = table.Column<int>(type: "int", nullable: false),
+                    IncludeSystemRecommendations = table.Column<bool>(type: "bit", nullable: false),
+                    MotivationMessagesEnabled = table.Column<bool>(type: "bit", nullable: false),
+                    PreferredQuestionCount = table.Column<int>(type: "int", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_UserPreferences", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "LearningItems",
                 columns: table => new
                 {
@@ -56,34 +99,44 @@ namespace Wordix.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "UserProfiles",
+                name: "LookupHistories",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     KeycloakUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    Email = table.Column<string>(type: "nvarchar(256)", maxLength: 256, nullable: false),
-                    Username = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
-                    DisplayName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
-                    AccountType = table.Column<int>(type: "int", nullable: false),
-                    NativeLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    TargetLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    QueryText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    NormalizedQueryText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    InputType = table.Column<int>(type: "int", nullable: false),
+                    SourceLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TargetLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    LearningItemId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    WasFoundInDatabase = table.Column<bool>(type: "bit", nullable: false),
+                    WasCreatedFromProvider = table.Column<bool>(type: "bit", nullable: false),
+                    ProviderType = table.Column<int>(type: "int", nullable: true),
+                    ProviderName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
+                    ResultCount = table.Column<int>(type: "int", nullable: false),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_UserProfiles", x => x.Id);
+                    table.PrimaryKey("PK_LookupHistories", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_UserProfiles_Languages_NativeLanguageId",
-                        column: x => x.NativeLanguageId,
+                        name: "FK_LookupHistories_Languages_SourceLanguageId",
+                        column: x => x.SourceLanguageId,
                         principalTable: "Languages",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
-                        name: "FK_UserProfiles_Languages_TargetLanguageId",
+                        name: "FK_LookupHistories_Languages_TargetLanguageId",
                         column: x => x.TargetLanguageId,
                         principalTable: "Languages",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_LookupHistories_LearningItems_LearningItemId",
+                        column: x => x.LearningItemId,
+                        principalTable: "LearningItems",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
                 });
@@ -122,6 +175,38 @@ namespace Wordix.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "QuizQuestions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    QuizSessionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    LearningItemId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    QuestionType = table.Column<int>(type: "int", nullable: false),
+                    QuestionText = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
+                    CorrectAnswer = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    DisplayOrder = table.Column<int>(type: "int", nullable: false),
+                    IsSystemRecommended = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_QuizQuestions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_QuizQuestions_LearningItems_LearningItemId",
+                        column: x => x.LearningItemId,
+                        principalTable: "LearningItems",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_QuizQuestions_QuizSessions_QuizSessionId",
+                        column: x => x.QuizSessionId,
+                        principalTable: "QuizSessions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "Words",
                 columns: table => new
                 {
@@ -146,115 +231,11 @@ namespace Wordix.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "LookupHistories",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    QueryText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    NormalizedQueryText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    InputType = table.Column<int>(type: "int", nullable: false),
-                    SourceLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    TargetLanguageId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    LearningItemId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    WasFoundInDatabase = table.Column<bool>(type: "bit", nullable: false),
-                    WasCreatedFromProvider = table.Column<bool>(type: "bit", nullable: false),
-                    ProviderType = table.Column<int>(type: "int", nullable: true),
-                    ProviderName = table.Column<string>(type: "nvarchar(150)", maxLength: 150, nullable: true),
-                    ResultCount = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_LookupHistories", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_LookupHistories_Languages_SourceLanguageId",
-                        column: x => x.SourceLanguageId,
-                        principalTable: "Languages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LookupHistories_Languages_TargetLanguageId",
-                        column: x => x.TargetLanguageId,
-                        principalTable: "Languages",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LookupHistories_LearningItems_LearningItemId",
-                        column: x => x.LearningItemId,
-                        principalTable: "LearningItems",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_LookupHistories_UserProfiles_UserProfileId",
-                        column: x => x.UserProfileId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "QuizSessions",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    QuizType = table.Column<int>(type: "int", nullable: false),
-                    QuizSourceType = table.Column<int>(type: "int", nullable: false),
-                    QuizContentMode = table.Column<int>(type: "int", nullable: false),
-                    DifficultyGroup = table.Column<int>(type: "int", nullable: false),
-                    DeckId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    IncludeSystemRecommendations = table.Column<bool>(type: "bit", nullable: false),
-                    QuestionCount = table.Column<int>(type: "int", nullable: false),
-                    StartedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    CompletedAt = table.Column<DateTime>(type: "datetime2", nullable: true),
-                    Status = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_QuizSessions", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_QuizSessions_UserProfiles_UserProfileId",
-                        column: x => x.UserProfileId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "UserPreferences",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    DefaultQuizType = table.Column<int>(type: "int", nullable: false),
-                    DefaultDifficultyGroup = table.Column<int>(type: "int", nullable: false),
-                    IncludeSystemRecommendations = table.Column<bool>(type: "bit", nullable: false),
-                    MotivationMessagesEnabled = table.Column<bool>(type: "bit", nullable: false),
-                    PreferredQuestionCount = table.Column<int>(type: "int", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_UserPreferences", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_UserPreferences_UserProfiles_UserProfileId",
-                        column: x => x.UserProfileId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
                 name: "UserLearningItems",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    KeycloakUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
                     LearningItemId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     SelectedMeaningId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
                     SourceLookupHistoryId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
@@ -284,42 +265,25 @@ namespace Wordix.Persistence.Migrations
                         principalTable: "Meanings",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_UserLearningItems_UserProfiles_UserProfileId",
-                        column: x => x.UserProfileId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
-                name: "QuizQuestions",
+                name: "QuizOptions",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    QuizSessionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    LearningItemId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    QuestionType = table.Column<int>(type: "int", nullable: false),
-                    QuestionText = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: false),
-                    CorrectAnswer = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    DisplayOrder = table.Column<int>(type: "int", nullable: false),
-                    IsSystemRecommended = table.Column<bool>(type: "bit", nullable: false),
-                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    UpdatedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                    QuizQuestionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    OptionText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    IsCorrect = table.Column<bool>(type: "bit", nullable: false),
+                    DisplayOrder = table.Column<int>(type: "int", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_QuizQuestions", x => x.Id);
+                    table.PrimaryKey("PK_QuizOptions", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_QuizQuestions_LearningItems_LearningItemId",
-                        column: x => x.LearningItemId,
-                        principalTable: "LearningItems",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_QuizQuestions_QuizSessions_QuizSessionId",
-                        column: x => x.QuizSessionId,
-                        principalTable: "QuizSessions",
+                        name: "FK_QuizOptions_QuizQuestions_QuizQuestionId",
+                        column: x => x.QuizQuestionId,
+                        principalTable: "QuizQuestions",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -354,20 +318,31 @@ namespace Wordix.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "QuizOptions",
+                name: "QuizAnswers",
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     QuizQuestionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    OptionText = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    IsCorrect = table.Column<bool>(type: "bit", nullable: false),
-                    DisplayOrder = table.Column<int>(type: "int", nullable: false)
+                    KeycloakUserId = table.Column<string>(type: "nvarchar(100)", maxLength: 100, nullable: false),
+                    SelectedQuizOptionId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
+                    UserAnswer = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
+                    CorrectAnswer = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
+                    AnswerResult = table.Column<int>(type: "int", nullable: false),
+                    ResponseTimeMilliseconds = table.Column<int>(type: "int", nullable: false),
+                    AnsweredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    AddedToDictionaryBecauseWrong = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_QuizOptions", x => x.Id);
+                    table.PrimaryKey("PK_QuizAnswers", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_QuizOptions_QuizQuestions_QuizQuestionId",
+                        name: "FK_QuizAnswers_QuizOptions_SelectedQuizOptionId",
+                        column: x => x.SelectedQuizOptionId,
+                        principalTable: "QuizOptions",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
+                    table.ForeignKey(
+                        name: "FK_QuizAnswers_QuizQuestions_QuizQuestionId",
                         column: x => x.QuizQuestionId,
                         principalTable: "QuizQuestions",
                         principalColumn: "Id",
@@ -396,44 +371,6 @@ namespace Wordix.Persistence.Migrations
                         principalTable: "UserLearningProgresses",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "QuizAnswers",
-                columns: table => new
-                {
-                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    QuizQuestionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    UserProfileId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
-                    SelectedQuizOptionId = table.Column<Guid>(type: "uniqueidentifier", nullable: true),
-                    UserAnswer = table.Column<string>(type: "nvarchar(1000)", maxLength: 1000, nullable: true),
-                    CorrectAnswer = table.Column<string>(type: "nvarchar(500)", maxLength: 500, nullable: false),
-                    AnswerResult = table.Column<int>(type: "int", nullable: false),
-                    ResponseTimeMilliseconds = table.Column<int>(type: "int", nullable: false),
-                    AnsweredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
-                    AddedToDictionaryBecauseWrong = table.Column<bool>(type: "bit", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_QuizAnswers", x => x.Id);
-                    table.ForeignKey(
-                        name: "FK_QuizAnswers_QuizOptions_SelectedQuizOptionId",
-                        column: x => x.SelectedQuizOptionId,
-                        principalTable: "QuizOptions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
-                    table.ForeignKey(
-                        name: "FK_QuizAnswers_QuizQuestions_QuizQuestionId",
-                        column: x => x.QuizQuestionId,
-                        principalTable: "QuizQuestions",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
-                    table.ForeignKey(
-                        name: "FK_QuizAnswers_UserProfiles_UserProfileId",
-                        column: x => x.UserProfileId,
-                        principalTable: "UserProfiles",
-                        principalColumn: "Id",
-                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.InsertData(
@@ -512,6 +449,11 @@ namespace Wordix.Persistence.Migrations
                 column: "InputType");
 
             migrationBuilder.CreateIndex(
+                name: "IX_LookupHistories_KeycloakUserId",
+                table: "LookupHistories",
+                column: "KeycloakUserId");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_LookupHistories_LearningItemId",
                 table: "LookupHistories",
                 column: "LearningItemId");
@@ -537,11 +479,6 @@ namespace Wordix.Persistence.Migrations
                 column: "TargetLanguageId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_LookupHistories_UserProfileId",
-                table: "LookupHistories",
-                column: "UserProfileId");
-
-            migrationBuilder.CreateIndex(
                 name: "IX_Meanings_LearningItemId_TargetLanguageId_DisplayOrder",
                 table: "Meanings",
                 columns: new[] { "LearningItemId", "TargetLanguageId", "DisplayOrder" });
@@ -562,6 +499,16 @@ namespace Wordix.Persistence.Migrations
                 column: "AnswerResult");
 
             migrationBuilder.CreateIndex(
+                name: "IX_QuizAnswers_KeycloakUserId",
+                table: "QuizAnswers",
+                column: "KeycloakUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_QuizAnswers_KeycloakUserId_AnsweredAt",
+                table: "QuizAnswers",
+                columns: new[] { "KeycloakUserId", "AnsweredAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_QuizAnswers_QuizQuestionId",
                 table: "QuizAnswers",
                 column: "QuizQuestionId");
@@ -570,16 +517,6 @@ namespace Wordix.Persistence.Migrations
                 name: "IX_QuizAnswers_SelectedQuizOptionId",
                 table: "QuizAnswers",
                 column: "SelectedQuizOptionId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_QuizAnswers_UserProfileId",
-                table: "QuizAnswers",
-                column: "UserProfileId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_QuizAnswers_UserProfileId_AnsweredAt",
-                table: "QuizAnswers",
-                columns: new[] { "UserProfileId", "AnsweredAt" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_QuizOptions_QuizQuestionId_DisplayOrder",
@@ -604,19 +541,30 @@ namespace Wordix.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_QuizSessions_KeycloakUserId",
+                table: "QuizSessions",
+                column: "KeycloakUserId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_QuizSessions_KeycloakUserId_StartedAt",
+                table: "QuizSessions",
+                columns: new[] { "KeycloakUserId", "StartedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_QuizSessions_Status",
                 table: "QuizSessions",
                 column: "Status");
 
             migrationBuilder.CreateIndex(
-                name: "IX_QuizSessions_UserProfileId",
-                table: "QuizSessions",
-                column: "UserProfileId");
+                name: "IX_UserLearningItems_KeycloakUserId_IsActive",
+                table: "UserLearningItems",
+                columns: new[] { "KeycloakUserId", "IsActive" });
 
             migrationBuilder.CreateIndex(
-                name: "IX_QuizSessions_UserProfileId_StartedAt",
-                table: "QuizSessions",
-                columns: new[] { "UserProfileId", "StartedAt" });
+                name: "IX_UserLearningItems_KeycloakUserId_LearningItemId",
+                table: "UserLearningItems",
+                columns: new[] { "KeycloakUserId", "LearningItemId" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserLearningItems_LearningItemId",
@@ -632,17 +580,6 @@ namespace Wordix.Persistence.Migrations
                 name: "IX_UserLearningItems_SourceLookupHistoryId",
                 table: "UserLearningItems",
                 column: "SourceLookupHistoryId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserLearningItems_UserProfileId_IsActive",
-                table: "UserLearningItems",
-                columns: new[] { "UserProfileId", "IsActive" });
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserLearningItems_UserProfileId_LearningItemId",
-                table: "UserLearningItems",
-                columns: new[] { "UserProfileId", "LearningItemId" },
-                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_UserLearningProgresses_LearningStatus",
@@ -661,37 +598,10 @@ namespace Wordix.Persistence.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_UserPreferences_UserProfileId",
+                name: "IX_UserPreferences_KeycloakUserId",
                 table: "UserPreferences",
-                column: "UserProfileId",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Email",
-                table: "UserProfiles",
-                column: "Email",
-                unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_KeycloakUserId",
-                table: "UserProfiles",
                 column: "KeycloakUserId",
                 unique: true);
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_NativeLanguageId",
-                table: "UserProfiles",
-                column: "NativeLanguageId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_TargetLanguageId",
-                table: "UserProfiles",
-                column: "TargetLanguageId");
-
-            migrationBuilder.CreateIndex(
-                name: "IX_UserProfiles_Username",
-                table: "UserProfiles",
-                column: "Username");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Words_LearningItemId",
@@ -743,9 +653,6 @@ namespace Wordix.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "LearningItems");
-
-            migrationBuilder.DropTable(
-                name: "UserProfiles");
 
             migrationBuilder.DropTable(
                 name: "Languages");

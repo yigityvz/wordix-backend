@@ -8,8 +8,12 @@ namespace Wordix.Persistence.Configurations;
 /// <summary>
 /// UserPreference entity'sinin veritabanı tablo ayarlarını yapar.
 /// 
-/// UserPreference, kullanıcının quiz ve uygulama tercihlerini tutar.
-/// UserProfile şişmesin diye ayrı tablo olarak tasarlanmıştır.
+/// UserPreference, kullanıcının quiz, öneri, motivasyon ve uygulama tercihlerini tutar.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile tablosu üzerinden kullanıcı sahipliği kurmaz.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - UserPreferences tablosu kullanıcıyı doğrudan KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class UserPreferenceConfiguration : IEntityTypeConfiguration<UserPreference>
 {
@@ -19,7 +23,11 @@ public class UserPreferenceConfiguration : IEntityTypeConfiguration<UserPreferen
 
         builder.ConfigureAuditableEntity();
 
-        builder.Property(preference => preference.UserProfileId)
+        // KeycloakUserId, JWT token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+        // Backend bu kullanıcı için ayrıca UserProfileId/UserId üretmez.
+        // Bu alan dış identity provider id'si olduğu için string olarak tutulur.
+        builder.Property(preference => preference.KeycloakUserId)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(preference => preference.DefaultQuizType)
@@ -39,16 +47,19 @@ public class UserPreferenceConfiguration : IEntityTypeConfiguration<UserPreferen
         builder.Property(preference => preference.PreferredQuestionCount)
             .IsRequired();
 
-        // Her kullanıcı için bir tercih kaydı olmasını istiyoruz.
-        builder.HasIndex(preference => preference.UserProfileId)
+        // Her Keycloak kullanıcısı için bir tercih kaydı olmasını istiyoruz.
+        //
+        // Eski yapı:
+        // UserProfileId unique
+        //
+        // Yeni yapı:
+        // KeycloakUserId unique
+        builder.HasIndex(preference => preference.KeycloakUserId)
             .IsUnique();
 
-        // UserPreference, UserProfile'a bağlıdır.
-        // UserProfile silinirse preference kaydı da silinebilir.
-        // Çünkü preference tek başına anlamlı değildir.
-        builder.HasOne<UserProfile>()
-            .WithOne()
-            .HasForeignKey<UserPreference>(preference => preference.UserProfileId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Önemli:
+        // Burada artık UserProfile foreign key ilişkisi yok.
+        // Çünkü Keycloak kullanıcısı bizim SQL database'imizde bir tablo olarak tutulmuyor.
+        // KeycloakUserId dış identity provider id'si olarak saklanır.
     }
 }

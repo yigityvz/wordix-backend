@@ -13,12 +13,19 @@ namespace Wordix.Domain.Entities;
 /// - QuizType genelde Test olacak.
 /// - QuizSourceType genelde UserDictionary olacak.
 /// - QuizContentMode genelde WordsOnly olacak.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfileId/UserId üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Bu entity, quiz oturumunu token içindeki "sub" claiminden gelen KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class QuizSession : AuditableEntity
 {
     /// <summary>
     /// EF Core için protected constructor.
-    /// Dışarıdan boş QuizSession oluşturulmasını istemiyoruz.
+    /// 
+    /// EF Core database'den kayıt okurken bu constructor'ı kullanabilir.
+    /// Dışarıdan boş QuizSession oluşturulmasını istemediğimiz için protected bırakıyoruz.
     /// </summary>
     protected QuizSession()
     {
@@ -26,9 +33,14 @@ public class QuizSession : AuditableEntity
 
     /// <summary>
     /// Yeni quiz oturumu oluşturur.
+    /// 
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelir.
+    /// - Quiz oturumunun hangi Keycloak kullanıcısına ait olduğunu belirtir.
+    /// - Backend tarafından üretilen UserProfileId değildir.
     /// </summary>
     public QuizSession(
-        Guid userProfileId,
+        string keycloakUserId,
         QuizType quizType,
         QuizSourceType quizSourceType,
         QuizContentMode quizContentMode,
@@ -37,9 +49,9 @@ public class QuizSession : AuditableEntity
         bool includeSystemRecommendations = false,
         Guid? deckId = null)
     {
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
-            throw new ArgumentException("UserProfileId boş Guid olamaz.", nameof(userProfileId));
+            throw new ArgumentException("KeycloakUserId boş olamaz.", nameof(keycloakUserId));
         }
 
         if (questionCount <= 0)
@@ -52,7 +64,7 @@ public class QuizSession : AuditableEntity
             throw new ArgumentException("Deck kaynaklı quiz için DeckId zorunludur.", nameof(deckId));
         }
 
-        UserProfileId = userProfileId;
+        KeycloakUserId = keycloakUserId.Trim();
         QuizType = quizType;
         QuizSourceType = quizSourceType;
         QuizContentMode = quizContentMode;
@@ -65,9 +77,13 @@ public class QuizSession : AuditableEntity
     }
 
     /// <summary>
-    /// Quiz'i başlatan kullanıcı profil Id'sidir.
+    /// Quiz oturumunu başlatan Keycloak kullanıcısının id değeridir.
+    /// 
+    /// Bu değer JWT token içindeki "sub" claiminden gelir.
+    /// Wordix backend ayrıca UserProfileId/UserId üretmediği için
+    /// kullanıcıya ait quiz oturumları bu alan üzerinden filtrelenir.
     /// </summary>
-    public Guid UserProfileId { get; private set; }
+    public string KeycloakUserId { get; private set; } = string.Empty;
 
     /// <summary>
     /// Quiz'in genel tipidir.
@@ -130,7 +146,6 @@ public class QuizSession : AuditableEntity
     /// Örnek: InProgress, Completed, Cancelled
     /// </summary>
     public QuizSessionStatus Status { get; private set; } = QuizSessionStatus.InProgress;
-    
 
     /// <summary>
     /// Quiz oturumunu tamamlanmış hale getirir.

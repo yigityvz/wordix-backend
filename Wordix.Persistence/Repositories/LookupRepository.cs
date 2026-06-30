@@ -9,6 +9,11 @@ namespace Wordix.Persistence.Repositories;
 /// LookupHistory için özel repository implementasyonudur.
 /// 
 /// Kullanıcıların lookup geçmişi ve ileride admin analytics sorguları için kullanılır.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfileId/UserId üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Lookup geçmişi Keycloak token içindeki "sub" claiminden gelen KeycloakUserId ile filtrelenir.
 /// </summary>
 public class LookupRepository : ILookupRepository
 {
@@ -24,15 +29,19 @@ public class LookupRepository : ILookupRepository
     /// <summary>
     /// Kullanıcının son lookup kayıtlarını getirir.
     /// 
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+    /// - UserProfileId yerine kullanılır.
+    /// 
     /// count parametresi dışarıdan gelebileceği için güvenli bir üst limit uyguluyoruz.
     /// Böylece yanlışlıkla binlerce kayıt çekilmesini engelleriz.
     /// </summary>
     public async Task<IReadOnlyList<LookupHistory>> GetRecentLookupsByUserAsync(
-        Guid userProfileId,
+        string keycloakUserId,
         int count,
         CancellationToken cancellationToken = default)
     {
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
             return Array.Empty<LookupHistory>();
         }
@@ -42,11 +51,12 @@ public class LookupRepository : ILookupRepository
             return Array.Empty<LookupHistory>();
         }
 
+        var normalizedKeycloakUserId = keycloakUserId.Trim();
         var safeCount = Math.Min(count, MaxRecentLookupCount);
 
         return await _dbContext.LookupHistories
             .AsNoTracking()
-            .Where(lookup => lookup.UserProfileId == userProfileId)
+            .Where(lookup => lookup.KeycloakUserId == normalizedKeycloakUserId)
             .OrderByDescending(lookup => lookup.CreatedAt)
             .Take(safeCount)
             .ToListAsync(cancellationToken);
@@ -57,13 +67,15 @@ public class LookupRepository : ILookupRepository
     /// 
     /// Örneğin kullanıcı "achieve" kelimesini daha önce aramış mı?
     /// Aradıysa en son arama kaydı hangisi?
+    /// 
+    /// Kullanıcı filtresi artık UserProfileId ile değil, KeycloakUserId ile yapılır.
     /// </summary>
     public async Task<LookupHistory?> GetLastLookupByUserAndQueryAsync(
-        Guid userProfileId,
+        string keycloakUserId,
         string normalizedQueryText,
         CancellationToken cancellationToken = default)
     {
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
             return null;
         }
@@ -73,12 +85,13 @@ public class LookupRepository : ILookupRepository
             return null;
         }
 
+        var normalizedKeycloakUserId = keycloakUserId.Trim();
         var normalized = normalizedQueryText.Trim().ToLowerInvariant();
 
         return await _dbContext.LookupHistories
             .AsNoTracking()
             .Where(lookup =>
-                lookup.UserProfileId == userProfileId &&
+                lookup.KeycloakUserId == normalizedKeycloakUserId &&
                 lookup.NormalizedQueryText == normalized)
             .OrderByDescending(lookup => lookup.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken);

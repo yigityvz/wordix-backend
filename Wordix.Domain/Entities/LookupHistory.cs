@@ -12,11 +12,20 @@ namespace Wordix.Domain.Entities;
 /// - Provider kullanılıp kullanılmadığını,
 /// - Kaç sonuç döndüğünü
 /// takip edebilir.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık kendi UserProfileId/UserId değerini üretmez.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - Bu entity, kullanıcıyı token içindeki "sub" claiminden gelen KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class LookupHistory : AuditableEntity
 {
     /// <summary>
     /// EF Core için protected constructor.
+    /// 
+    /// EF Core entity'leri database'den okurken parametreli constructor yerine
+    /// bu constructor'ı kullanabilir.
+    /// Dışarıdan bilinçsiz boş nesne oluşturulmasını engellemek için protected bırakıyoruz.
     /// </summary>
     protected LookupHistory()
     {
@@ -24,9 +33,14 @@ public class LookupHistory : AuditableEntity
 
     /// <summary>
     /// Yeni lookup geçmiş kaydı oluşturur.
+    /// 
+    /// keycloakUserId:
+    /// - Token içindeki "sub" claiminden gelir.
+    /// - Kullanıcının Wordix içindeki lookup geçmişini sahiplenmek için kullanılır.
+    /// - Backend tarafından üretilen bir UserProfileId değildir.
     /// </summary>
     public LookupHistory(
-        Guid userProfileId,
+        string keycloakUserId,
         string queryText,
         string normalizedQueryText,
         InputType inputType,
@@ -39,9 +53,9 @@ public class LookupHistory : AuditableEntity
         string? providerName,
         int resultCount)
     {
-        if (userProfileId == Guid.Empty)
+        if (string.IsNullOrWhiteSpace(keycloakUserId))
         {
-            throw new ArgumentException("UserProfileId boş Guid olamaz.", nameof(userProfileId));
+            throw new ArgumentException("KeycloakUserId boş olamaz.", nameof(keycloakUserId));
         }
 
         if (string.IsNullOrWhiteSpace(queryText))
@@ -69,7 +83,7 @@ public class LookupHistory : AuditableEntity
             throw new ArgumentException("ResultCount negatif olamaz.", nameof(resultCount));
         }
 
-        UserProfileId = userProfileId;
+        KeycloakUserId = keycloakUserId.Trim();
         QueryText = queryText.Trim();
         NormalizedQueryText = normalizedQueryText.Trim().ToLowerInvariant();
         InputType = inputType;
@@ -84,9 +98,13 @@ public class LookupHistory : AuditableEntity
     }
 
     /// <summary>
-    /// Lookup işlemini yapan kullanıcı profil Id'sidir.
+    /// Lookup işlemini yapan Keycloak kullanıcısının id değeridir.
+    /// 
+    /// Bu değer JWT token içindeki "sub" claiminden gelir.
+    /// Wordix backend ayrıca UserProfileId/UserId üretmediği için
+    /// kullanıcıya ait lookup kayıtları bu alan üzerinden filtrelenir.
     /// </summary>
-    public Guid UserProfileId { get; private set; }
+    public string KeycloakUserId { get; private set; } = string.Empty;
 
     /// <summary>
     /// Kullanıcının yazdığı orijinal arama metnidir.
@@ -157,6 +175,4 @@ public class LookupHistory : AuditableEntity
     /// Örneğin bir kelime için 3 anlam dönmüş olabilir.
     /// </summary>
     public int ResultCount { get; private set; }
-
-    
 }

@@ -39,7 +39,7 @@ public static class ApiServiceRegistration
         services.AddWordixAuthorization();
 
         // Application katmanındaki use-case servislerini ekler.
-        // Örnek: UserProfileSyncService.
+        // Örnek: currentUserProfileService.
         services.AddWordixApplication();
 
         // EF Core, DbContext ve MSSQL bağlantı ayarları Persistence katmanında tanımlıdır.

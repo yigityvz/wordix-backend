@@ -14,7 +14,7 @@ namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 /// StartQuizCommand isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - Current user'ın UserProfile kaydını alır.
+/// - Current user'ın KeycloakUserId değerini alır.
 /// - Kullanıcının dictionary itemlarını okur.
 /// - İlk prototipte sadece Word itemlardan soru üretir.
 /// - Dictionary itemlarını QuizQuestionCandidate modeline dönüştürür.
@@ -23,6 +23,11 @@ namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 /// - QuizQuestion kayıtları oluşturur.
 /// - QuizOption kayıtları oluşturur.
 /// - Oluşturulan quiz bilgisini response olarak döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Quiz oturumu token içindeki KeycloakUserId ile kullanıcıya bağlanır.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir use-case akışıdır.
@@ -39,7 +44,7 @@ public sealed class StartQuizCommandHandler
     /// </summary>
     private const int OptionCountPerQuestion = 4;
 
-    private readonly IUserProfileSyncService _userProfileSyncService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
@@ -56,10 +61,12 @@ public sealed class StartQuizCommandHandler
     /// Burada DbContext yok.
     /// Burada HttpContext yok.
     /// Burada controller yok.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden alınır.
     /// Soru üretme algoritması da direkt burada yazılmaz; IQuizQuestionGenerator kullanılır.
     /// </summary>
     public StartQuizCommandHandler(
-        IUserProfileSyncService userProfileSyncService,
+        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
@@ -70,7 +77,7 @@ public sealed class StartQuizCommandHandler
         IQuizQuestionGenerator quizQuestionGenerator,
         IUnitOfWork unitOfWork)
     {
-        _userProfileSyncService = userProfileSyncService;
+        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
@@ -89,16 +96,20 @@ public sealed class StartQuizCommandHandler
         StartQuizCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix UserProfile kaydını alıyoruz.
-        // Kullanıcı bilgisi request body'den değil, JWT token üzerinden gelir.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        // Kullanıcıya ait dictionary ve quiz kayıtları bu KeycloakUserId ile ilişkilendirilir.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // 2. Kullanıcının aktif dictionary itemlarını alıyoruz.
         // QuizSourceType = Dictionary olduğu için global kelimelerden değil,
         // kullanıcının kendi kaydettiği itemlardan soru üreteceğiz.
+        //
+        // Yeni mimaride bu sorgu UserProfileId ile değil KeycloakUserId ile çalışır.
         var userLearningItems = await _userLearningItemRepository
-            .GetActiveItemsByUserAsync(userProfile.Id, cancellationToken);
+            .GetActiveItemsByUserAsync(keycloakUserId, cancellationToken);
 
         if (userLearningItems.Count == 0)
         {
@@ -148,17 +159,7 @@ public sealed class StartQuizCommandHandler
 
         // 6. QuizSession oluşturuyoruz.
         //
-        // Önemli:
-        // Mevcut QuizSession constructor imzası şu şekilde:
-        // QuizSession(
-        //     Guid userProfileId,
-        //     QuizType quizType,
-        //     QuizSourceType quizSourceType,
-        //     QuizContentMode quizContentMode,
-        //     DifficultyGroup difficultyGroup,
-        //     int questionCount,
-        //     bool includeSystemRecommendations,
-        //     Guid? deckId)
+        // Yeni QuizSession constructor imzası artık UserProfileId değil KeycloakUserId alır.
         //
         // İlk prototipte:
         // - Test quiz
@@ -168,7 +169,7 @@ public sealed class StartQuizCommandHandler
         // - Sistem önerisi yok
         // - Deck yok
         var quizSession = new QuizSession(
-            userProfile.Id,
+            keycloakUserId,
             QuizType.Test,
             QuizSourceType.UserDictionary,
             QuizContentMode.WordsOnly,
@@ -260,8 +261,8 @@ public sealed class StartQuizCommandHandler
                 QuestionType = generatedQuestion.QuestionType,
 
                 Options = createdOptionResponses
-                .OrderBy(option => option.DisplayOrder)
-                .ToArray()
+                    .OrderBy(option => option.DisplayOrder)
+                    .ToArray()
             });
         }
 
@@ -485,15 +486,15 @@ public sealed class StartQuizCommandHandler
         {
             var multipleChoiceAliases = new[]
             {
-            "MultipleChoice",
-            "Test",
-            "Translation",
-            "WordTranslation",
-            "WordToMeaning",
-            "MeaningSelection",
-            "MultipleChoiceMeaning",
-            "MultipleChoiceWordTranslation"
-        };
+                "MultipleChoice",
+                "Test",
+                "Translation",
+                "WordTranslation",
+                "WordToMeaning",
+                "MeaningSelection",
+                "MultipleChoiceMeaning",
+                "MultipleChoiceWordTranslation"
+            };
 
             foreach (var alias in multipleChoiceAliases)
             {

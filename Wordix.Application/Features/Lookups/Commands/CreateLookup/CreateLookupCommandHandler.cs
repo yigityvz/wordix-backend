@@ -1,14 +1,13 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
+using Wordix.Application.Common.Interfaces.Localization;
 using Wordix.Application.Common.Interfaces.Persistence;
-using Wordix.Application.Common.Models.Identity;
+using Wordix.Application.Common.Models.Localization;
 using Wordix.Application.Common.Models.Persistence;
 using Wordix.Application.Features.Lookups.Models;
 using Wordix.Application.Features.Lookups.Responses;
 using Wordix.Application.Features.Lookups.Services;
-using Wordix.Application.Common.Interfaces.Localization;
-using Wordix.Application.Common.Models.Localization;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
 
@@ -19,7 +18,7 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 /// 
 /// Bu handler ne yapar?
 /// - Kullanıcının lookup isteğini işler.
-/// - Current user profile bilgisini alır.
+/// - Current user bilgisinden KeycloakUserId değerini alır.
 /// - Text'i normalize eder.
 /// - Input tipini belirler.
 /// - İlk prototipte sadece Word lookup destekler.
@@ -28,6 +27,11 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 /// - Provider sonucu varsa LearningItem + Word + Meaning oluşturur.
 /// - Her durumda uygun LookupHistory kaydı oluşturur.
 /// - Kullanıcıya LookupResponse döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Kullanıcı sahipliği token içindeki KeycloakUserId ile yapılır.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir use-case akışıdır.
@@ -41,7 +45,7 @@ public sealed class CreateLookupCommandHandler
 {
     private const string DatabaseLookupSource = "Database";
 
-    private readonly IUserProfileSyncService _userProfileSyncService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly ITextNormalizer _textNormalizer;
     private readonly ILookupClassifier _lookupClassifier;
     private readonly IDictionaryProvider _dictionaryProvider;
@@ -53,6 +57,7 @@ public sealed class CreateLookupCommandHandler
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<LookupHistory> _lookupHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
+
     /// <summary>
     /// Handler ihtiyacı olan tüm application/persistence abstraction'larını DI üzerinden alır.
     /// 
@@ -60,10 +65,12 @@ public sealed class CreateLookupCommandHandler
     /// Burada DbContext yok.
     /// Burada HttpContext yok.
     /// Burada Keycloak claim okuma yok.
-    /// Bunların hepsi önceki fazlarda interface'ler arkasına alınmıştı.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden alınır.
+    /// Bu servis Application katmanına sadece gerekli kullanıcı bilgisini sağlar.
     /// </summary>
     public CreateLookupCommandHandler(
-        IUserProfileSyncService userProfileSyncService,
+        ICurrentUserService currentUserService,
         ITextNormalizer textNormalizer,
         ILookupClassifier lookupClassifier,
         IDictionaryProvider dictionaryProvider,
@@ -76,7 +83,7 @@ public sealed class CreateLookupCommandHandler
         IRepository<LookupHistory> lookupHistoryRepository,
         IUnitOfWork unitOfWork)
     {
-        _userProfileSyncService = userProfileSyncService;
+        _currentUserService = currentUserService;
         _textNormalizer = textNormalizer;
         _lookupClassifier = lookupClassifier;
         _dictionaryProvider = dictionaryProvider;
@@ -97,10 +104,12 @@ public sealed class CreateLookupCommandHandler
         CreateLookupCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix UserProfile kaydını getiriyoruz.
-        // Eğer kullanıcı ilk kez geliyorsa UserProfileSyncService bunu oluşturabilir.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        // Kullanıcıya ait lookup/dictionary/progress gibi kayıtlar bu KeycloakUserId ile ilişkilendirilir.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // 2. Kullanıcının gönderdiği ham text'i normalize ediyoruz.
         // Örnek:
@@ -128,7 +137,7 @@ public sealed class CreateLookupCommandHandler
         if (inputType is not LookupInputType.Word)
         {
             await SaveUnsupportedLookupHistoryAsync(
-                userProfileId: userProfile.Id,
+                keycloakUserId: keycloakUserId,
                 request: request,
                 normalizedText: normalizedText,
                 inputType: inputType,
@@ -152,7 +161,7 @@ public sealed class CreateLookupCommandHandler
         if (databaseLookupData is not null)
         {
             return await HandleDatabaseLookupResultAsync(
-                userProfileId: userProfile.Id,
+                keycloakUserId: keycloakUserId,
                 request: request,
                 normalizedText: normalizedText,
                 sourceLanguage: sourceLanguage,
@@ -172,7 +181,7 @@ public sealed class CreateLookupCommandHandler
         if (!providerResult.Found)
         {
             await SaveNotFoundLookupHistoryAsync(
-                userProfileId: userProfile.Id,
+                keycloakUserId: keycloakUserId,
                 request: request,
                 normalizedText: normalizedText,
                 sourceLanguageId: sourceLanguage.Id,
@@ -185,7 +194,7 @@ public sealed class CreateLookupCommandHandler
 
         // 8. Provider sonucu varsa global içerik havuzuna LearningItem + Word + Meaning oluşturuyoruz.
         return await HandleProviderLookupResultAsync(
-            userProfileId: userProfile.Id,
+            keycloakUserId: keycloakUserId,
             request: request,
             normalizedText: normalizedText,
             sourceLanguage: sourceLanguage,
@@ -194,24 +203,22 @@ public sealed class CreateLookupCommandHandler
             cancellationToken: cancellationToken);
     }
 
-
-
     /// <summary>
     /// Database'de bulunan kelime için LookupHistory oluşturur ve LookupResponse döner.
     /// </summary>
     private async Task<LookupResponse> HandleDatabaseLookupResultAsync(
-    Guid userProfileId,
-    CreateLookupCommand request,
-    string normalizedText,
-    LanguageLookupData sourceLanguage,
-    LanguageLookupData targetLanguage,
-    WordLookupData databaseLookupData,
-    CancellationToken cancellationToken)
+        string keycloakUserId,
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        WordLookupData databaseLookupData,
+        CancellationToken cancellationToken)
     {
         var resultCount = databaseLookupData.Meanings.Count;
 
         var lookupHistory = CreateLookupHistory(
-            userProfileId: userProfileId,
+            keycloakUserId: keycloakUserId,
             queryText: request.Text,
             normalizedQueryText: normalizedText,
             inputType: LookupInputType.Word,
@@ -226,9 +233,11 @@ public sealed class CreateLookupCommandHandler
         await _lookupHistoryRepository.AddAsync(lookupHistory, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
+        // Kullanıcının dictionary'sinde bu item zaten var mı diye kontrol ediyoruz.
+        // Yeni mimaride bu kontrol UserProfileId ile değil KeycloakUserId ile yapılacak.
         var isAlreadyInUserDictionary = await _userLearningItemRepository
             .ExistsByUserAndLearningItemAsync(
-                userProfileId,
+                keycloakUserId,
                 databaseLookupData.LearningItem.Id,
                 cancellationToken);
 
@@ -252,13 +261,13 @@ public sealed class CreateLookupCommandHandler
     /// Provider'dan bulunan kelime için LearningItem + Word + Meaning + LookupHistory oluşturur.
     /// </summary>
     private async Task<LookupResponse> HandleProviderLookupResultAsync(
-    Guid userProfileId,
-    CreateLookupCommand request,
-    string normalizedText,
-    LanguageLookupData sourceLanguage,
-    LanguageLookupData targetLanguage,
-    DictionaryProviderResult providerResult,
-    CancellationToken cancellationToken)
+        string keycloakUserId,
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        DictionaryProviderResult providerResult,
+        CancellationToken cancellationToken)
     {
         // İlk prototype provider'da CEFR/Difficulty otomatik tespit etmiyoruz.
         // Faz 24 import/provider sisteminde bu konu detaylandırılacak.
@@ -291,7 +300,7 @@ public sealed class CreateLookupCommandHandler
             .ToArray();
 
         var lookupHistory = CreateLookupHistory(
-            userProfileId: userProfileId,
+            keycloakUserId: keycloakUserId,
             queryText: request.Text,
             normalizedQueryText: normalizedText,
             inputType: LookupInputType.Word,
@@ -341,7 +350,7 @@ public sealed class CreateLookupCommandHandler
     /// Phrase/Sentence gibi ilk prototipte desteklenmeyen inputlar için lookup history kaydı oluşturur.
     /// </summary>
     private async Task SaveUnsupportedLookupHistoryAsync(
-        Guid userProfileId,
+        string keycloakUserId,
         CreateLookupCommand request,
         string normalizedText,
         LookupInputType inputType,
@@ -350,7 +359,7 @@ public sealed class CreateLookupCommandHandler
         CancellationToken cancellationToken)
     {
         var lookupHistory = CreateLookupHistory(
-            userProfileId: userProfileId,
+            keycloakUserId: keycloakUserId,
             queryText: request.Text,
             normalizedQueryText: normalizedText,
             inputType: inputType,
@@ -370,7 +379,7 @@ public sealed class CreateLookupCommandHandler
     /// Database ve provider sonucunda bulunamayan kelimeler için lookup history oluşturur.
     /// </summary>
     private async Task SaveNotFoundLookupHistoryAsync(
-        Guid userProfileId,
+        string keycloakUserId,
         CreateLookupCommand request,
         string normalizedText,
         Guid sourceLanguageId,
@@ -379,7 +388,7 @@ public sealed class CreateLookupCommandHandler
         CancellationToken cancellationToken)
     {
         var lookupHistory = CreateLookupHistory(
-            userProfileId: userProfileId,
+            keycloakUserId: keycloakUserId,
             queryText: request.Text,
             normalizedQueryText: normalizedText,
             inputType: LookupInputType.Word,
@@ -401,9 +410,12 @@ public sealed class CreateLookupCommandHandler
     /// Neden ayrı method?
     /// - Database sonucu, provider sonucu, not found ve unsupported input senaryolarında
     ///   aynı entity oluşturma kodunu tekrar etmemek için.
+    /// 
+    /// Yeni mimaride LookupHistory kullanıcıyı UserProfileId ile değil,
+    /// doğrudan KeycloakUserId ile sahiplenir.
     /// </summary>
     private static LookupHistory CreateLookupHistory(
-        Guid userProfileId,
+        string keycloakUserId,
         string queryText,
         string normalizedQueryText,
         LookupInputType inputType,
@@ -416,7 +428,7 @@ public sealed class CreateLookupCommandHandler
         int resultCount)
     {
         return new LookupHistory(
-            userProfileId,
+            keycloakUserId,
             queryText,
             normalizedQueryText,
             MapToDomainInputType(inputType),

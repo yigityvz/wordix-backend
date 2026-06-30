@@ -10,6 +10,11 @@ namespace Wordix.Persistence.Configurations;
 /// 
 /// QuizSession, kullanıcının başlattığı quiz oturumunu temsil eder.
 /// Bir quiz oturumu içinde birden fazla soru bulunabilir.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile tablosu üzerinden kullanıcı sahipliği kurmaz.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - QuizSessions tablosu kullanıcıyı doğrudan KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class QuizSessionConfiguration : IEntityTypeConfiguration<QuizSession>
 {
@@ -19,7 +24,11 @@ public class QuizSessionConfiguration : IEntityTypeConfiguration<QuizSession>
 
         builder.ConfigureAuditableEntity();
 
-        builder.Property(session => session.UserProfileId)
+        // KeycloakUserId, JWT token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+        // Backend bu kullanıcı için ayrıca UserProfileId/UserId üretmez.
+        // Bu alan dış identity provider id'si olduğu için string olarak tutulur.
+        builder.Property(session => session.KeycloakUserId)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(session => session.QuizType)
@@ -58,24 +67,25 @@ public class QuizSessionConfiguration : IEntityTypeConfiguration<QuizSession>
             .IsRequired();
 
         // Kullanıcının quiz geçmişini listelemek için kullanılır.
-        builder.HasIndex(session => session.UserProfileId);
+        // Eski yapı UserProfileId ile çalışıyordu.
+        // Yeni yapı KeycloakUserId ile çalışır.
+        builder.HasIndex(session => session.KeycloakUserId);
 
         // Kullanıcının quiz geçmişini tarih sırasına göre çekmek için faydalı index.
+        // Örnek sorgu:
+        // WHERE KeycloakUserId = '...' ORDER BY StartedAt DESC
         builder.HasIndex(session => new
         {
-            session.UserProfileId,
+            session.KeycloakUserId,
             session.StartedAt
         });
 
         // Devam eden quizleri bulmak için kullanılabilir.
         builder.HasIndex(session => session.Status);
 
-        // QuizSession kullanıcıya bağlıdır.
-        // Kullanıcı fiziksel silinirse quiz geçmişinin otomatik silinmesini istemiyoruz.
-        // Normal uygulama akışında kullanıcı pasifleştirilecek, fiziksel silinmeyecek.
-        builder.HasOne<UserProfile>()
-            .WithMany()
-            .HasForeignKey(session => session.UserProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Önemli:
+        // Burada artık UserProfile foreign key ilişkisi yok.
+        // Çünkü Keycloak kullanıcısı bizim SQL database'imizde bir tablo olarak tutulmuyor.
+        // KeycloakUserId dış identity provider id'si olarak saklanır.
     }
 }

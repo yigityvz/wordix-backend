@@ -15,6 +15,11 @@ namespace Wordix.Persistence.Configurations;
 /// - database'de bulunamayan aramalar,
 /// - kullanıcının arama davranışı
 /// gibi analytics ihtiyaçları için kullanılacaktır.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile tablosu üzerinden kullanıcı sahipliği kurmaz.
+/// - Kullanıcı kimliği Keycloak tarafından yönetilir.
+/// - LookupHistory tablosu kullanıcıyı doğrudan KeycloakUserId ile ilişkilendirir.
 /// </summary>
 public class LookupHistoryConfiguration : IEntityTypeConfiguration<LookupHistory>
 {
@@ -24,7 +29,11 @@ public class LookupHistoryConfiguration : IEntityTypeConfiguration<LookupHistory
 
         builder.ConfigureAuditableEntity();
 
-        builder.Property(lookup => lookup.UserProfileId)
+        // KeycloakUserId, JWT token içindeki "sub" claiminden gelen kullanıcı id değeridir.
+        // Backend bu kullanıcı için ayrıca UserProfileId/UserId üretmez.
+        // Bu alan dış identity provider id'si olduğu için string olarak tutulur.
+        builder.Property(lookup => lookup.KeycloakUserId)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(lookup => lookup.QueryText)
@@ -66,7 +75,8 @@ public class LookupHistoryConfiguration : IEntityTypeConfiguration<LookupHistory
             .IsRequired();
 
         // Kullanıcının geçmiş aramalarını listelemek için faydalı index.
-        builder.HasIndex(lookup => lookup.UserProfileId);
+        // Artık filtreleme UserProfileId ile değil, KeycloakUserId ile yapılır.
+        builder.HasIndex(lookup => lookup.KeycloakUserId);
 
         // Admin analytics tarafında en çok aranan normalize metinleri bulmak için faydalı index.
         builder.HasIndex(lookup => lookup.NormalizedQueryText);
@@ -78,13 +88,10 @@ public class LookupHistoryConfiguration : IEntityTypeConfiguration<LookupHistory
         // Provider kullanılan aramaları analiz etmek için index ekliyoruz.
         builder.HasIndex(lookup => lookup.ProviderType);
 
-        // LookupHistory kullanıcıya bağlıdır.
-        // Kullanıcı fiziksel silinirse lookup geçmişinin otomatik silinmesini istemiyoruz.
-        // Analytics verisi kaybolmasın diye Restrict kullanıyoruz.
-        builder.HasOne<UserProfile>()
-            .WithMany()
-            .HasForeignKey(lookup => lookup.UserProfileId)
-            .OnDelete(DeleteBehavior.Restrict);
+        // Önemli:
+        // Burada artık UserProfile foreign key ilişkisi yok.
+        // Çünkü Keycloak kullanıcısı bizim SQL database'imizde bir tablo olarak tutulmuyor.
+        // KeycloakUserId dış identity provider id'si olarak saklanır.
 
         // Kaynak dil ilişkisi.
         // Dil silinirse geçmiş lookup kayıtlarının silinmesini istemeyiz.

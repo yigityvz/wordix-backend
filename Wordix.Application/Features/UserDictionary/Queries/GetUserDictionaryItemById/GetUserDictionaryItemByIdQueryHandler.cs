@@ -11,11 +11,16 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryIt
 /// GetUserDictionaryItemByIdQuery isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - Current user'ın UserProfile kaydını alır.
+/// - Current user'ın KeycloakUserId değerini alır.
 /// - Route'tan gelen UserLearningItemId ile dictionary kaydını bulur.
 /// - Kayıt current user'a ait mi kontrol eder.
 /// - İlgili LearningItem, Word, Meaning, Language ve Progress bilgilerini toplar.
 /// - UserDictionaryItemResponse döner.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Kullanıcının dictionary kayıtları KeycloakUserId ile sahiplenilir.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir query/use-case akışıdır.
@@ -26,7 +31,7 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryIt
 public sealed class GetUserDictionaryItemByIdQueryHandler
     : IRequestHandler<GetUserDictionaryItemByIdQuery, UserDictionaryItemResponse>
 {
-    private readonly IUserProfileSyncService _userProfileSyncService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
@@ -40,10 +45,12 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
     /// Burada DbContext yok.
     /// Burada HttpContext yok.
     /// Burada controller yok.
-    /// Current user bilgisi IUserProfileSyncService üzerinden gelir.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden gelir.
+    /// Bu servis token claim okuma detayını Application katmanından saklar.
     /// </summary>
     public GetUserDictionaryItemByIdQueryHandler(
-        IUserProfileSyncService userProfileSyncService,
+        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
@@ -51,7 +58,7 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
     {
-        _userProfileSyncService = userProfileSyncService;
+        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
@@ -67,10 +74,12 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         GetUserDictionaryItemByIdQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix UserProfile kaydını alıyoruz.
-        // Kullanıcı bilgisi route/body üzerinden değil, token üzerinden bulunur.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        // Ownership kontrolü doğrudan KeycloakUserId üzerinden yapılır.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // 2. UserLearningItem kaydını id ile buluyoruz.
         // Bu id global LearningItemId değil, kullanıcının kişisel dictionary kayıt id'sidir.
@@ -86,8 +95,14 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         }
 
         // 3. Ownership kontrolü.
+        //
         // Kullanıcı başkasına ait UserLearningItem detayını göremez.
-        if (userLearningItem.UserProfileId != userProfile.Id)
+        // Eski mimaride bu kontrol UserProfileId ile yapılıyordu.
+        // Yeni mimaride UserLearningItem.KeycloakUserId ile token'daki KeycloakUserId karşılaştırılır.
+        if (!string.Equals(
+                userLearningItem.KeycloakUserId,
+                keycloakUserId,
+                StringComparison.Ordinal))
         {
             throw new ForbiddenException(
                 "You cannot access another user's dictionary item.");

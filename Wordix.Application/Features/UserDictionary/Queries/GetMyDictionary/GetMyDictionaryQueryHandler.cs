@@ -10,10 +10,15 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 /// GetMyDictionaryQuery isteğini işleyen MediatR handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - Current user'ın UserProfile kaydını alır.
+/// - Current user'ın KeycloakUserId değerini alır.
 /// - Kullanıcının aktif dictionary kayıtlarını getirir.
 /// - Her dictionary kaydı için LearningItem, Word, Meaning, Language ve Progress bilgilerini toplar.
 /// - API'ye dönecek GetMyDictionaryResponse modelini üretir.
+/// 
+/// Yeni kullanıcı modeli:
+/// - Backend artık UserProfile oluşturmaz.
+/// - Backend UserProfileId/UserId üretmez.
+/// - Kullanıcının dictionary kayıtları KeycloakUserId ile filtrelenir.
 /// 
 /// Bu handler neden Application katmanında?
 /// - Bu bir query/use-case akışıdır.
@@ -25,7 +30,7 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 public sealed class GetMyDictionaryQueryHandler
     : IRequestHandler<GetMyDictionaryQuery, GetMyDictionaryResponse>
 {
-    private readonly IUserProfileSyncService _userProfileSyncService;
+    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
@@ -37,10 +42,14 @@ public sealed class GetMyDictionaryQueryHandler
     /// Handler ihtiyacı olan repository ve servisleri DI üzerinden alır.
     /// 
     /// Burada DbContext inject etmiyoruz.
-    /// Bu sayede Application katmanı Persistence detaylarını bilmez.
+    /// Burada HttpContext inject etmiyoruz.
+    /// Bu sayede Application katmanı Persistence ve API detaylarını bilmez.
+    /// 
+    /// Current user bilgisi ICurrentUserService üzerinden alınır.
+    /// Bu servis token claim okuma detayını Application katmanından saklar.
     /// </summary>
     public GetMyDictionaryQueryHandler(
-        IUserProfileSyncService userProfileSyncService,
+        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
@@ -48,7 +57,7 @@ public sealed class GetMyDictionaryQueryHandler
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
     {
-        _userProfileSyncService = userProfileSyncService;
+        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
@@ -64,15 +73,17 @@ public sealed class GetMyDictionaryQueryHandler
         GetMyDictionaryQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın Wordix UserProfile kaydını alıyoruz.
-        // Kullanıcı kimliği request'ten değil, token üzerinden bulunur.
-        var userProfile = await _userProfileSyncService
-            .GetOrCreateCurrentUserProfileAsync(cancellationToken);
+        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        //
+        // Bu değer JWT token içindeki "sub" claiminden gelir.
+        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
+        // Dictionary kayıtları doğrudan bu KeycloakUserId üzerinden filtrelenir.
+        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // 2. Kullanıcının aktif dictionary kayıtlarını getiriyoruz.
-        // Bu method Faz 9'da özel repository olarak eklenmişti.
+        // Bu method artık UserProfileId değil, KeycloakUserId ile çalışır.
         var userLearningItems = await _userLearningItemRepository
-            .GetActiveItemsByUserAsync(userProfile.Id, cancellationToken);
+            .GetActiveItemsByUserAsync(keycloakUserId, cancellationToken);
 
         // Dictionary boşsa gereksiz database sorguları yapmadan boş response döneriz.
         if (userLearningItems.Count == 0)
