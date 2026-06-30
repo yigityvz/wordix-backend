@@ -1,6 +1,7 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Interfaces.Identity;
-using Wordix.Application.Features.Profile.Responses;
+using Wordix.Application.Features.Profile.Dtos.Responses;
+using Wordix.Application.Features.Profile.Mappers;
 
 namespace Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
 
@@ -8,8 +9,8 @@ namespace Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
 /// GetCurrentUserInfoQuery isteğini işleyen handler'dır.
 /// 
 /// Bu handler ne yapar?
-/// - ICurrentUserService üzerinden current user's token bilgilerini okur.
-/// - KeycloakUserId, email, username ve rollerden response DTO üretir.
+/// - ICurrentUserService üzerinden current user's token bilgilerine erişir.
+/// - Response DTO üretimini ProfileMapper'a bırakır.
 /// - Database'e gitmez.
 /// - UserProfile oluşturmaz.
 /// - UserPreference oluşturmaz.
@@ -23,6 +24,11 @@ namespace Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
 /// - Controller'ın token claim detaylarını bilmemesi için.
 /// - /api/profile/me endpointinin use-case mantığını Application katmanında tutmak için.
 /// - İleride validation/logging pipeline behavior'larının bu akışa otomatik dahil olabilmesi için.
+/// 
+/// Neden mapping burada yapılmıyor?
+/// - Handler use-case akışını yönetmelidir.
+/// - Response DTO propertylerini tek tek doldurma işi mapper sorumluluğudur.
+/// - Böylece mapping kuralları feature seviyesinde merkezi kalır.
 /// </summary>
 public sealed class GetCurrentUserInfoQueryHandler
     : IRequestHandler<GetCurrentUserInfoQuery, CurrentUserInfoResponse>
@@ -49,29 +55,9 @@ public sealed class GetCurrentUserInfoQueryHandler
         GetCurrentUserInfoQuery request,
         CancellationToken cancellationToken)
     {
-        // KeycloakUserId zorunludur.
-        // Eğer kullanıcı authenticated değilse veya token içinde "sub" claim'i okunamazsa
-        // ICurrentUserService uygun UnauthorizedAccessException fırlatır.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
-
-        // Bu response tamamen token bilgisiyle üretilir.
-        // Burada repository yok, UnitOfWork yok, SaveChanges yok.
-        var response = new CurrentUserInfoResponse
-        {
-            IsAuthenticated = _currentUserService.IsAuthenticated,
-            KeycloakUserId = keycloakUserId,
-            Email = _currentUserService.Email ?? string.Empty,
-            Username = _currentUserService.Username ?? string.Empty,
-
-            // Rolleri temizleyip tekrar edenleri ayıklıyoruz.
-            // Bu sadece response kalitesini artırır; authorization zaten policy üzerinden çalışır.
-            Roles = _currentUserService.Roles
-                .Where(role => !string.IsNullOrWhiteSpace(role))
-                .Select(role => role.Trim())
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(role => role)
-                .ToArray()
-        };
+        // Handler burada response propertylerini tek tek doldurmaz.
+        // Current user → response dönüşümü ProfileMapper içinde merkezi olarak yapılır.
+        var response = ProfileMapper.ToCurrentUserInfoResponse(_currentUserService);
 
         return Task.FromResult(response);
     }

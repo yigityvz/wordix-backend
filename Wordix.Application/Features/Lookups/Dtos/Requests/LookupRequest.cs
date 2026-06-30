@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Lookups.Requests;
+﻿namespace Wordix.Application.Features.Lookups.Dtos.Requests;
 
 /// <summary>
 /// Lookup endpointine dışarıdan gönderilecek request modelidir.

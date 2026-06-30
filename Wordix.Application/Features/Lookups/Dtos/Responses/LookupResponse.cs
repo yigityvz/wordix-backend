@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Lookups.Responses;
+﻿namespace Wordix.Application.Features.Lookups.Dtos.Responses;
 
 /// <summary>
 /// Lookup işleminin başarılı sonucunda API'ye dönecek response modelidir.

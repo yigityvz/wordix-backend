@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.UserDictionary.Responses;
+﻿namespace Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 /// <summary>
 /// Kullanıcının dictionary listesindeki bir learning item'a ait anlam bilgisini temsil eder.

@@ -2,9 +2,10 @@
 using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
-using Wordix.Application.Features.UserDictionary.Responses;
+using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.UserDictionary.Mappers;
 
 namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 
@@ -177,19 +178,13 @@ public sealed class SaveLearningItemCommandHandler
         // EF Core SaveChanges kendi transaction mantığıyla bu kayıtları birlikte işler.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 12. API'ye dönecek response'u manual map ediyoruz.
-        return new SaveLearningItemResponse
-        {
-            UserLearningItemId = userLearningItem.Id,
-            LearningItemId = learningItem.Id,
-            SelectedMeaningId = selectedMeaning?.Id,
-            UserLearningProgressId = userLearningProgress.Id,
-            SourceLookupHistoryId = request.SourceLookupHistoryId,
-            SavedAt = userLearningItem.SavedAt,
-            LearningStatus = userLearningProgress.LearningStatus.ToString(),
-            LearningConfidenceScore = userLearningProgress.LearningConfidenceScore,
-            IsActive = userLearningItem.IsActive
-        };
+        // 12. API response mapping işini feature mapper'a bırakıyoruz.
+        // Handler entity oluşturma ve use-case akışını yönetir;
+        // response DTO propertylerini tek tek dizmez.
+        return UserDictionaryMapper.ToSaveLearningItemResponse(
+            userLearningItem: userLearningItem,
+            learningItem: learningItem,
+            userLearningProgress: userLearningProgress);
     }
 
     /// <summary>

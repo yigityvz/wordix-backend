@@ -3,10 +3,11 @@ using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Models;
-using Wordix.Application.Features.Quizzes.Responses;
+using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Application.Features.Quizzes.Services;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.Quizzes.Mappers;
 
 namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 
@@ -190,13 +191,9 @@ public sealed class StartQuizCommandHandler
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Generator doğru cevabı seçenekler içinde IsCorrect = true olarak işaretledi.
-            // QuizQuestion entity ise CorrectAnswer string alanı istiyor.
-            var correctAnswerText = ResolveCorrectAnswerText(generatedQuestion);
+            var correctAnswerText = QuizMapper.ResolveCorrectAnswerText(generatedQuestion);
 
-            // GeneratedQuestion.QuestionType string olarak geliyor.
-            // Domain entity ise QuestionType enum bekliyor.
-            var questionType = ResolveQuestionType(generatedQuestion.QuestionType);
+            var questionType = QuizMapper.ToDomainQuestionType(generatedQuestion.QuestionType);
 
             // Mevcut QuizQuestion entity alanları:
             // QuizSessionId, LearningItemId, QuestionType, QuestionText,
@@ -237,50 +234,24 @@ public sealed class StartQuizCommandHandler
                     quizOption,
                     cancellationToken);
 
-                // API response'a IsCorrect koymuyoruz.
-                // Doğru cevap bilgisi sadece backend/database tarafında kalır.
-                createdOptionResponses.Add(new QuizOptionResponse
-                {
-                    QuizOptionId = quizOption.Id,
-                    DisplayOrder = quizOption.DisplayOrder,
-                    OptionText = quizOption.OptionText
-                });
+                createdOptionResponses.Add(
+                     QuizMapper.ToQuizOptionResponse(quizOption));
             }
 
-            createdQuestionResponses.Add(new QuizQuestionResponse
-            {
-                QuizQuestionId = quizQuestion.Id,
-                QuestionOrder = quizQuestion.DisplayOrder,
-                QuestionText = quizQuestion.QuestionText,
-                LearningItemId = quizQuestion.LearningItemId,
-                WordId = generatedQuestion.WordId,
-                ItemType = LearningItemType.Word.ToString(),
-
-                // API response'ta generator'ın daha açıklayıcı question type değerini döndürüyoruz.
-                // Database tarafında ise QuizQuestion.QuestionType domain enum olarak saklanıyor.
-                QuestionType = generatedQuestion.QuestionType,
-
-                Options = createdOptionResponses
-                    .OrderBy(option => option.DisplayOrder)
-                    .ToArray()
-            });
+            createdQuestionResponses.Add(
+                QuizMapper.ToQuizQuestionResponse(
+                    quizQuestion: quizQuestion,
+                    generatedQuestion: generatedQuestion,
+                    optionResponses: createdOptionResponses));
         }
 
         // 8. QuizSession + QuizQuestion + QuizOption kayıtlarını tek SaveChanges ile kaydediyoruz.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 9. Response dönüyoruz.
-        return new StartQuizResponse
-        {
-            QuizSessionId = quizSession.Id,
-            QuizType = request.QuizType.Trim(),
-            QuizSourceType = request.QuizSourceType.Trim(),
-            QuizContentMode = request.QuizContentMode.Trim(),
-            QuestionCount = createdQuestionResponses.Count,
-            StartedAt = quizSession.StartedAt,
-            Status = quizSession.Status.ToString(),
-            Questions = createdQuestionResponses
-        };
+        return QuizMapper.ToStartQuizResponse(
+            request: request,
+            quizSession: quizSession,
+            questionResponses: createdQuestionResponses);
     }
 
     /// <summary>
@@ -421,101 +392,5 @@ public sealed class StartQuizCommandHandler
         return meanings
             .OrderBy(meaning => meaning.DisplayOrder)
             .FirstOrDefault();
-    }
-
-    /// <summary>
-    /// GeneratedQuizQuestion içindeki doğru seçeneğin metnini bulur.
-    /// 
-    /// QuizQuestion entity, doğru cevabı string olarak saklıyor.
-    /// Bu yüzden doğru option'ın OptionText değerini CorrectAnswer alanına yazıyoruz.
-    /// </summary>
-    private static string ResolveCorrectAnswerText(GeneratedQuizQuestion generatedQuestion)
-    {
-        var correctOption = generatedQuestion.Options
-            .FirstOrDefault(option => option.IsCorrect);
-
-        if (correctOption is null)
-        {
-            throw new BusinessRuleException(
-                "Generated quiz question does not contain a correct option.",
-                "GENERATED_QUESTION_HAS_NO_CORRECT_OPTION");
-        }
-
-        return correctOption.OptionText;
-    }
-
-    /// <summary>
-    /// Generator'dan gelen question type değerini domain QuestionType enum'una çevirir.
-    /// 
-    /// Neden bu mapping gerekli?
-    /// - Generator daha açıklayıcı bir application-level değer üretebilir:
-    ///   "MultipleChoiceTranslation"
-    /// 
-    /// - Domain enum ise daha genel bir değer tutuyor olabilir:
-    ///   "MultipleChoice", "Test", "Translation" vb.
-    /// 
-    /// Bu yüzden generator string'i ile domain enum adının birebir aynı olmasını zorunlu kılmıyoruz.
-    /// Handler boundary'sinde güvenli mapping yapıyoruz.
-    /// </summary>
-    private static QuestionType ResolveQuestionType(string questionType)
-    {
-        if (string.IsNullOrWhiteSpace(questionType))
-        {
-            throw new BusinessRuleException(
-                "Generated question type is required.",
-                "QUESTION_TYPE_REQUIRED");
-        }
-
-        // 1. Önce birebir enum parse deniyoruz.
-        // Eğer domain enum içinde "MultipleChoiceTranslation" varsa direkt çalışır.
-        if (Enum.TryParse<QuestionType>(
-                questionType.Trim(),
-                ignoreCase: true,
-                out var parsedQuestionType))
-        {
-            return parsedQuestionType;
-        }
-
-        // 2. İlk prototip generator'ımız "MultipleChoiceTranslation" üretiyor.
-        // Fakat mevcut Domain enum bu ismi taşımıyor.
-        // Bu yüzden onu domain tarafındaki en yakın çoktan seçmeli soru tipine map ediyoruz.
-        if (string.Equals(
-                questionType.Trim(),
-                "MultipleChoiceTranslation",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            var multipleChoiceAliases = new[]
-            {
-                "MultipleChoice",
-                "Test",
-                "Translation",
-                "WordTranslation",
-                "WordToMeaning",
-                "MeaningSelection",
-                "MultipleChoiceMeaning",
-                "MultipleChoiceWordTranslation"
-            };
-
-            foreach (var alias in multipleChoiceAliases)
-            {
-                if (Enum.TryParse<QuestionType>(
-                        alias,
-                        ignoreCase: true,
-                        out var aliasQuestionType))
-                {
-                    return aliasQuestionType;
-                }
-            }
-        }
-
-        // 3. Hâlâ bulunamadıysa bu sefer hatada mevcut enum değerlerini de gösteriyoruz.
-        // Böylece tekrar runtime hatası alırsak enum dosyasını açmadan bile hangi değerlerin olduğunu görürüz.
-        var supportedQuestionTypes = string.Join(
-            ", ",
-            Enum.GetNames<QuestionType>());
-
-        throw new BusinessRuleException(
-            $"Question type '{questionType}' is not supported. Supported domain question types: {supportedQuestionTypes}.",
-            "QUESTION_TYPE_NOT_SUPPORTED");
     }
 }

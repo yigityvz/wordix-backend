@@ -3,10 +3,11 @@ using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Models;
-using Wordix.Application.Features.Quizzes.Responses;
+using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Application.Features.Quizzes.Services;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.Quizzes.Mappers;
 
 namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 
@@ -310,32 +311,13 @@ public sealed class SubmitQuizAnswerCommandHandler
         // 18. Tüm değişiklikler tek transaction/save akışında kaydedilir.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        // 19. Response hazırlanır.
-        return new SubmitQuizAnswerResponse
-        {
-            QuizAnswerId = quizAnswer.Id,
-            QuizSessionId = quizSession.Id,
-            QuizQuestionId = quizQuestion.Id,
-            SelectedQuizOptionId = selectedOption.Id,
-            IsCorrect = evaluationResult.IsCorrect,
-            SelectedOptionText = evaluationResult.SelectedOptionText,
-            CorrectAnswerText = evaluationResult.CorrectAnswerText,
-            QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds,
-            AnsweredAt = quizAnswer.AnsweredAt,
-
-            CorrectCount = progressUpdateResult.CorrectCount,
-            WrongCount = progressUpdateResult.WrongCount,
-            ConsecutiveCorrectCount = progressUpdateResult.ConsecutiveCorrectCount,
-            ConsecutiveWrongCount = progressUpdateResult.ConsecutiveWrongCount,
-
-            PreviousLearningStatus = progressUpdateResult.PreviousLearningStatus.ToString(),
-            CurrentLearningStatus = progressUpdateResult.NewLearningStatus.ToString(),
-
-            PreviousConfidenceScore = progressUpdateResult.PreviousConfidenceScore,
-            CurrentConfidenceScore = progressUpdateResult.NewConfidenceScore,
-
-            NextReviewDate = progressUpdateResult.NextReviewDate
-        };
+        return QuizMapper.ToSubmitQuizAnswerResponse(
+            quizAnswer: quizAnswer,
+            quizSession: quizSession,
+            quizQuestion: quizQuestion,
+            selectedOption: selectedOption,
+            evaluationResult: evaluationResult,
+            progressUpdateResult: progressUpdateResult);
     }
 
     /// <summary>

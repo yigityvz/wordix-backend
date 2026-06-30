@@ -6,10 +6,11 @@ using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Common.Models.Localization;
 using Wordix.Application.Common.Models.Persistence;
 using Wordix.Application.Features.Lookups.Models;
-using Wordix.Application.Features.Lookups.Responses;
+using Wordix.Application.Features.Lookups.Dtos.Responses;
 using Wordix.Application.Features.Lookups.Services;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.Lookups.Mappers;
 
 namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 
@@ -43,7 +44,6 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 public sealed class CreateLookupCommandHandler
     : IRequestHandler<CreateLookupCommand, LookupResponse>
 {
-    private const string DatabaseLookupSource = "Database";
 
     private readonly ICurrentUserService _currentUserService;
     private readonly ITextNormalizer _textNormalizer;
@@ -241,20 +241,14 @@ public sealed class CreateLookupCommandHandler
                 databaseLookupData.LearningItem.Id,
                 cancellationToken);
 
-        return new LookupResponse
-        {
-            LearningItemId = databaseLookupData.LearningItem.Id,
-            WordId = databaseLookupData.Word.Id,
-            LookupHistoryId = lookupHistory.Id,
-            Text = request.Text,
-            NormalizedText = normalizedText,
-            ItemType = databaseLookupData.LearningItem.ItemType.ToString(),
-            SourceLanguageCode = sourceLanguage.Code,
-            TargetLanguageCode = targetLanguage.Code,
-            LookupSource = DatabaseLookupSource,
-            IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = MapMeanings(databaseLookupData.Meanings)
-        };
+        return LookupMapper.ToDatabaseLookupResponse(
+            request: request,
+            normalizedText: normalizedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            databaseLookupData: databaseLookupData,
+            lookupHistory: lookupHistory,
+            isAlreadyInUserDictionary: isAlreadyInUserDictionary);
     }
 
     /// <summary>
@@ -330,20 +324,17 @@ public sealed class CreateLookupCommandHandler
         // Bu yüzden false.
         const bool isAlreadyInUserDictionary = false;
 
-        return new LookupResponse
-        {
-            LearningItemId = learningItem.Id,
-            WordId = word.Id,
-            LookupHistoryId = lookupHistory.Id,
-            Text = request.Text,
-            NormalizedText = normalizedText,
-            ItemType = LearningItemType.Word.ToString(),
-            SourceLanguageCode = sourceLanguage.Code,
-            TargetLanguageCode = targetLanguage.Code,
-            LookupSource = providerResult.ProviderName,
-            IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = MapMeanings(meanings)
-        };
+        return LookupMapper.ToProviderLookupResponse(
+            request: request,
+            normalizedText: normalizedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            providerResult: providerResult,
+            learningItem: learningItem,
+            word: word,
+            meanings: meanings,
+            lookupHistory: lookupHistory,
+            isAlreadyInUserDictionary: isAlreadyInUserDictionary);
     }
 
     /// <summary>
@@ -431,7 +422,7 @@ public sealed class CreateLookupCommandHandler
             keycloakUserId,
             queryText,
             normalizedQueryText,
-            MapToDomainInputType(inputType),
+            LookupMapper.ToDomainInputType(inputType),
             sourceLanguageId,
             targetLanguageId,
             learningItemId,
@@ -442,36 +433,4 @@ public sealed class CreateLookupCommandHandler
             resultCount);
     }
 
-    /// <summary>
-    /// Application lookup input type değerini Domain InputType enumuna çevirir.
-    /// </summary>
-    private static InputType MapToDomainInputType(LookupInputType inputType)
-    {
-        return inputType switch
-        {
-            LookupInputType.Word => InputType.Word,
-            LookupInputType.Phrase => InputType.Phrase,
-            LookupInputType.Sentence => InputType.Sentence,
-            _ => InputType.Word
-        };
-    }
-
-    /// <summary>
-    /// Meaning entity listesini API response DTO listesine çevirir.
-    /// </summary>
-    private static IReadOnlyCollection<LookupMeaningResponse> MapMeanings(
-        IReadOnlyCollection<Meaning> meanings)
-    {
-        return meanings
-            .OrderBy(meaning => meaning.DisplayOrder)
-            .Select(meaning => new LookupMeaningResponse
-            {
-                MeaningId = meaning.Id,
-                Translation = meaning.MeaningText,
-                Definition = meaning.ShortDefinition,
-                ExampleSentence = null,
-                PartOfSpeech = meaning.PartOfSpeech
-            })
-            .ToArray();
-    }
 }

@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using Wordix.Application.Features.UserDictionary.Responses;
+using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 

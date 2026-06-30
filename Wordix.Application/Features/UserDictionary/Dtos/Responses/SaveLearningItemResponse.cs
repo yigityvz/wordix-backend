@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.UserDictionary.Responses;
+﻿namespace Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 /// <summary>
 /// Kullanıcı bir LearningItem'ı dictionary'sine başarıyla kaydettiğinde dönecek response modelidir.

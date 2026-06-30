@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Profile.Responses;
+﻿namespace Wordix.Application.Features.Profile.Dtos.Responses;
 
 /// <summary>
 /// /api/profile/me endpointinden dönecek current user token bilgi response modelidir.

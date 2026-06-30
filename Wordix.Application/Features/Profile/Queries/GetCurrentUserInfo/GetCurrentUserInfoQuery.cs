@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using Wordix.Application.Features.Profile.Responses;
+using Wordix.Application.Features.Profile.Dtos.Responses;
 
 namespace Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
 

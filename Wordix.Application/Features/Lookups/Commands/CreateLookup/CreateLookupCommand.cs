@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using Wordix.Application.Features.Lookups.Responses;
+using Wordix.Application.Features.Lookups.Dtos.Responses;
 
 namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 

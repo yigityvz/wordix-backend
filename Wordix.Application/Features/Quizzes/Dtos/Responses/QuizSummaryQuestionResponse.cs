@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Quizzes.Responses;
+﻿namespace Wordix.Application.Features.Quizzes.Dtos.Responses;
 
 /// <summary>
 /// Quiz summary içinde tek bir sorunun özet sonucunu temsil eder.

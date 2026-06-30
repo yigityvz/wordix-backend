@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Quizzes.Responses;
+﻿namespace Wordix.Application.Features.Quizzes.Dtos.Responses;
 
 /// <summary>
 /// Kullanıcı quiz cevabı gönderdiğinde API'nin döneceği response modelidir.

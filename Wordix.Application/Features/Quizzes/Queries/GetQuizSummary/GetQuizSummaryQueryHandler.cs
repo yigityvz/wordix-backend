@@ -2,9 +2,10 @@
 using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
-using Wordix.Application.Features.Quizzes.Responses;
+using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.Quizzes.Mappers;
 
 namespace Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 
@@ -109,7 +110,10 @@ public sealed class GetQuizSummaryQueryHandler
 
         if (orderedQuestions.Length == 0)
         {
-            return CreateEmptySummaryResponse(quizSession);
+            return QuizMapper.ToQuizSummaryResponse(
+                quizSession: quizSession,
+                orderedQuestions: Array.Empty<QuizQuestion>(),
+                answersByQuestionId: new Dictionary<Guid, QuizAnswer>());
         }
 
         var questionIds = orderedQuestions
@@ -133,212 +137,10 @@ public sealed class GetQuizSummaryQueryHandler
                     .OrderByDescending(answer => answer.AnsweredAt)
                     .First());
 
-        var questionResponses = orderedQuestions
-            .Select(question => MapQuestionSummary(
-                question,
-                answersByQuestionId))
-            .ToArray();
-
-        var answeredQuestions = questionResponses
-            .Where(question => question.IsAnswered)
-            .ToArray();
-
-        var correctAnswerCount = answeredQuestions
-            .Count(question => question.IsCorrect == true);
-
-        var wrongAnswerCount = answeredQuestions
-            .Count(question => question.IsCorrect == false);
-
-        var measuredResponseTimes = answeredQuestions
-            .Where(question => question.QuestionResponseTimeInMilliseconds.HasValue)
-            .Select(question => question.QuestionResponseTimeInMilliseconds!.Value)
-            .ToArray();
-
-        // 5. Summary response hazırlanır.
-        return new QuizSummaryResponse
-        {
-            QuizSessionId = quizSession.Id,
-            QuizType = quizSession.QuizType.ToString(),
-            QuizSourceType = quizSession.QuizSourceType.ToString(),
-            QuizContentMode = quizSession.QuizContentMode.ToString(),
-            Status = quizSession.Status.ToString(),
-            StartedAt = quizSession.StartedAt,
-
-            TotalQuestionCount = orderedQuestions.Length,
-            AnsweredQuestionCount = answeredQuestions.Length,
-            UnansweredQuestionCount = orderedQuestions.Length - answeredQuestions.Length,
-            CorrectAnswerCount = correctAnswerCount,
-            WrongAnswerCount = wrongAnswerCount,
-
-            AccuracyRate = CalculateRate(
-                numerator: correctAnswerCount,
-                denominator: answeredQuestions.Length),
-
-            CompletionRate = CalculateRate(
-                numerator: answeredQuestions.Length,
-                denominator: orderedQuestions.Length),
-
-            AverageQuestionResponseTimeInMilliseconds = CalculateAverageResponseTime(
-                measuredResponseTimes),
-
-            FastestQuestionResponseTimeInMilliseconds = measuredResponseTimes.Length == 0
-                ? null
-                : measuredResponseTimes.Min(),
-
-            SlowestQuestionResponseTimeInMilliseconds = measuredResponseTimes.Length == 0
-                ? null
-                : measuredResponseTimes.Max(),
-
-            Questions = questionResponses
-        };
+        return QuizMapper.ToQuizSummaryResponse(
+            quizSession: quizSession,
+            orderedQuestions: orderedQuestions,
+            answersByQuestionId: answersByQuestionId);
     }
 
-    /// <summary>
-    /// Soru olmayan quiz session için boş summary döner.
-    /// Normalde quiz session sorusuz olmamalıdır ama defensive davranıyoruz.
-    /// </summary>
-    private static QuizSummaryResponse CreateEmptySummaryResponse(
-        QuizSession quizSession)
-    {
-        return new QuizSummaryResponse
-        {
-            QuizSessionId = quizSession.Id,
-            QuizType = quizSession.QuizType.ToString(),
-            QuizSourceType = quizSession.QuizSourceType.ToString(),
-            QuizContentMode = quizSession.QuizContentMode.ToString(),
-            Status = quizSession.Status.ToString(),
-            StartedAt = quizSession.StartedAt,
-            TotalQuestionCount = 0,
-            AnsweredQuestionCount = 0,
-            UnansweredQuestionCount = 0,
-            CorrectAnswerCount = 0,
-            WrongAnswerCount = 0,
-            AccuracyRate = 0,
-            CompletionRate = 0,
-            Questions = Array.Empty<QuizSummaryQuestionResponse>()
-        };
-    }
-
-    /// <summary>
-    /// Tek bir QuizQuestion için summary response üretir.
-    /// </summary>
-    private static QuizSummaryQuestionResponse MapQuestionSummary(
-        QuizQuestion question,
-        IReadOnlyDictionary<Guid, QuizAnswer> answersByQuestionId)
-    {
-        if (!answersByQuestionId.TryGetValue(question.Id, out var answer))
-        {
-            return new QuizSummaryQuestionResponse
-            {
-                QuizQuestionId = question.Id,
-                QuestionOrder = question.DisplayOrder,
-                QuestionText = question.QuestionText,
-                LearningItemId = question.LearningItemId,
-                IsAnswered = false,
-                IsCorrect = null,
-                SelectedQuizOptionId = null,
-                SelectedAnswerText = null,
-                CorrectAnswerText = question.CorrectAnswer,
-                QuestionResponseTimeInMilliseconds = null,
-                AnsweredAt = null
-            };
-        }
-
-        return new QuizSummaryQuestionResponse
-        {
-            QuizQuestionId = question.Id,
-            QuestionOrder = question.DisplayOrder,
-            QuestionText = question.QuestionText,
-            LearningItemId = question.LearningItemId,
-            IsAnswered = true,
-            IsCorrect = IsCorrectAnswer(answer.AnswerResult),
-            SelectedQuizOptionId = answer.SelectedQuizOptionId,
-            SelectedAnswerText = answer.UserAnswer,
-            CorrectAnswerText = ResolveCorrectAnswerText(
-                answer,
-                question),
-            QuestionResponseTimeInMilliseconds = NormalizeResponseTime(
-                answer.ResponseTimeMilliseconds),
-            AnsweredAt = answer.AnsweredAt
-        };
-    }
-
-    /// <summary>
-    /// Cevap kaydındaki doğru cevap snapshot değerini çözer.
-    /// 
-    /// Normalde QuizAnswer.CorrectAnswer dolu olmalıdır.
-    /// Defensive davranmak için boşsa QuizQuestion.CorrectAnswer değerine döneriz.
-    /// </summary>
-    private static string ResolveCorrectAnswerText(
-        QuizAnswer answer,
-        QuizQuestion question)
-    {
-        return string.IsNullOrWhiteSpace(answer.CorrectAnswer)
-            ? question.CorrectAnswer
-            : answer.CorrectAnswer;
-    }
-
-    /// <summary>
-    /// AnswerResult enum değerini doğru/yanlış bool değerine çevirir.
-    /// 
-    /// Enum isimlerine aşırı sıkı bağlanmamak için alias kontrolü yapıyoruz.
-    /// </summary>
-    private static bool IsCorrectAnswer(
-        AnswerResult answerResult)
-    {
-        var answerResultText = answerResult.ToString();
-
-        return string.Equals(answerResultText, "Correct", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(answerResultText, "Right", StringComparison.OrdinalIgnoreCase)
-               || string.Equals(answerResultText, "Success", StringComparison.OrdinalIgnoreCase);
-    }
-
-    /// <summary>
-    /// Entity tarafında response time int olarak tutuluyor.
-    /// 0 veya negatif değer ölçülmemiş kabul edilir.
-    /// </summary>
-    private static int? NormalizeResponseTime(
-        int responseTimeMilliseconds)
-    {
-        return responseTimeMilliseconds <= 0
-            ? null
-            : responseTimeMilliseconds;
-    }
-
-    /// <summary>
-    /// Yüzdelik oran hesaplar.
-    /// 
-    /// Örnek:
-    /// 3 / 4 = 75.0
-    /// </summary>
-    private static double CalculateRate(
-        int numerator,
-        int denominator)
-    {
-        if (denominator == 0)
-        {
-            return 0;
-        }
-
-        return Math.Round(
-            numerator * 100.0 / denominator,
-            digits: 2);
-    }
-
-    /// <summary>
-    /// Ortalama cevap süresini hesaplar.
-    /// Ölçülmüş response time yoksa null döner.
-    /// </summary>
-    private static int? CalculateAverageResponseTime(
-        IReadOnlyCollection<int> measuredResponseTimes)
-    {
-        if (measuredResponseTimes.Count == 0)
-        {
-            return null;
-        }
-
-        return (int)Math.Round(
-            measuredResponseTimes.Average(),
-            MidpointRounding.AwayFromZero);
-    }
 }

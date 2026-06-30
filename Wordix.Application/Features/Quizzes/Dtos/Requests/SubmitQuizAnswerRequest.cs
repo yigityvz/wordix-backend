@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Quizzes.Requests;
+﻿namespace Wordix.Application.Features.Quizzes.Dtos.Requests;
 
 /// <summary>
 /// Kullanıcının quiz sorusuna cevap verirken API'ye göndereceği request modelidir.

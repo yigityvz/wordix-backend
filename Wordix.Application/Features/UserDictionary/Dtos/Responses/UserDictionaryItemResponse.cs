@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.UserDictionary.Responses;
+﻿namespace Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 /// <summary>
 /// Kullanıcının dictionary listesindeki tek bir item'ı temsil eder.

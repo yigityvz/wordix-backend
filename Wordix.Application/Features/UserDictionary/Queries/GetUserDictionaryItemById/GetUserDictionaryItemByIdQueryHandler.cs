@@ -2,8 +2,9 @@
 using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
-using Wordix.Application.Features.UserDictionary.Responses;
+using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
+using Wordix.Application.Features.UserDictionary.Mappers;
 
 namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryItemById;
 
@@ -141,105 +142,17 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             progress => progress.UserLearningItemId == userLearningItem.Id,
             cancellationToken);
 
-        // 9. Seçili anlamı çözüyoruz.
-        var selectedMeaning = ResolveSelectedMeaning(
-            selectedMeaningId: userLearningItem.SelectedMeaningId,
-            meanings: meanings);
 
-        return new UserDictionaryItemResponse
-        {
-            UserLearningItemId = userLearningItem.Id,
-            LearningItemId = learningItem.Id,
-            WordId = word?.Id,
-            ItemType = learningItem.ItemType.ToString(),
-            DisplayText = ResolveDisplayText(word),
-            NormalizedText = ResolveNormalizedText(word),
-            SourceLanguageCode = sourceLanguage?.Code ?? string.Empty,
-            SelectedMeaningId = selectedMeaning?.Id,
-            SelectedMeaning = selectedMeaning is null
-                ? null
-                : MapMeaningToResponse(selectedMeaning),
-            SavedAt = userLearningItem.SavedAt,
-            SourceLookupHistoryId = userLearningItem.SourceLookupHistoryId,
-            LearningStatus = progress?.LearningStatus.ToString() ?? string.Empty,
-            LearningConfidenceScore = progress?.LearningConfidenceScore ?? 0,
-            IsActive = userLearningItem.IsActive
-        };
+        // 9. API response mapping işini feature mapper'a bırakıyoruz.
+        // Handler veri toplama ve ownership kontrolü yapar;
+        // response DTO propertylerini tek tek dizmez.
+        return UserDictionaryMapper.ToUserDictionaryItemResponse(
+            userLearningItem: userLearningItem,
+            learningItem: learningItem,
+            word: word,
+            sourceLanguage: sourceLanguage,
+            meanings: meanings,
+            progress: progress);
     }
 
-    /// <summary>
-    /// Kullanıcının seçtiği meaning'i çözer.
-    /// 
-    /// Öncelik sırası:
-    /// 1. UserLearningItem.SelectedMeaningId ile eşleşen meaning
-    /// 2. IsPrimary olan meaning
-    /// 3. DisplayOrder'a göre ilk meaning
-    /// 4. null
-    /// </summary>
-    private static Meaning? ResolveSelectedMeaning(
-        Guid? selectedMeaningId,
-        IReadOnlyCollection<Meaning> meanings)
-    {
-        if (meanings.Count == 0)
-        {
-            return null;
-        }
-
-        if (selectedMeaningId is not null)
-        {
-            var selectedMeaning = meanings.FirstOrDefault(
-                meaning => meaning.Id == selectedMeaningId.Value);
-
-            if (selectedMeaning is not null)
-            {
-                return selectedMeaning;
-            }
-        }
-
-        var primaryMeaning = meanings.FirstOrDefault(meaning => meaning.IsPrimary);
-
-        if (primaryMeaning is not null)
-        {
-            return primaryMeaning;
-        }
-
-        return meanings
-            .OrderBy(meaning => meaning.DisplayOrder)
-            .FirstOrDefault();
-    }
-
-    /// <summary>
-    /// Word bilgisinden kullanıcıya gösterilecek ana metni çözer.
-    /// 
-    /// İlk prototipte sadece Word aktif.
-    /// Phrase/Sentence geldiğinde bu method genişletilebilir.
-    /// </summary>
-    private static string ResolveDisplayText(Word? word)
-    {
-        return word?.Text ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Word bilgisinden normalize edilmiş metni çözer.
-    /// </summary>
-    private static string ResolveNormalizedText(Word? word)
-    {
-        return word?.NormalizedText ?? string.Empty;
-    }
-
-    /// <summary>
-    /// Meaning entity'sini UserDictionaryMeaningResponse DTO'suna dönüştürür.
-    /// </summary>
-    private static UserDictionaryMeaningResponse MapMeaningToResponse(Meaning meaning)
-    {
-        return new UserDictionaryMeaningResponse
-        {
-            MeaningId = meaning.Id,
-            Translation = meaning.MeaningText,
-            Definition = meaning.ShortDefinition,
-            PartOfSpeech = meaning.PartOfSpeech,
-            IsPrimary = meaning.IsPrimary,
-            DisplayOrder = meaning.DisplayOrder
-        };
-    }
 }

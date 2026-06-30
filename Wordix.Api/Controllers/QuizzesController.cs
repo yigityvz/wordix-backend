@@ -3,8 +3,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wordix.Application.Features.Quizzes.Mappers;
 using Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
-using Wordix.Application.Features.Quizzes.Requests;
-using Wordix.Application.Features.Quizzes.Responses;
+using Wordix.Application.Features.Quizzes.Dtos.Requests;
+using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Shared.Responses;
 
 namespace Wordix.Api.Controllers;

@@ -1,5 +1,5 @@
 ﻿using MediatR;
-using Wordix.Application.Features.Quizzes.Responses;
+using Wordix.Application.Features.Quizzes.Dtos.Responses;
 
 namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 

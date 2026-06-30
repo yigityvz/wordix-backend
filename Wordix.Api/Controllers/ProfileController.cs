@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Wordix.Application.Features.Profile.Queries.GetCurrentUserInfo;
-using Wordix.Application.Features.Profile.Responses;
+using Wordix.Application.Features.Profile.Dtos.Responses;
 using Wordix.Shared.Responses;
 
 namespace Wordix.Api.Controllers;

@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.Quizzes.Responses;
+﻿namespace Wordix.Application.Features.Quizzes.Dtos.Responses;
 
 /// <summary>
 /// Quiz içindeki tek bir soruyu temsil eden response modelidir.

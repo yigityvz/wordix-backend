@@ -1,4 +1,4 @@
-﻿namespace Wordix.Application.Features.UserDictionary.Requests;
+﻿namespace Wordix.Application.Features.UserDictionary.Dtos.Requests;
 
 /// <summary>
 /// Kullanıcının bir LearningItem'ı kendi dictionary'sine kaydetmek için

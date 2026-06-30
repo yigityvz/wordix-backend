@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Wordix.Application.Features.UserDictionary.Mappers;
 using Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 using Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryItemById;
-using Wordix.Application.Features.UserDictionary.Requests;
-using Wordix.Application.Features.UserDictionary.Responses;
+using Wordix.Application.Features.UserDictionary.Dtos.Requests;
+using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Shared.Responses;
 
 namespace Wordix.Api.Controllers;
