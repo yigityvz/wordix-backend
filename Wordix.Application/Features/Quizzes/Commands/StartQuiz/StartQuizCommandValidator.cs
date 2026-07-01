@@ -16,8 +16,8 @@ namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 /// - QuizSourceType: UserDictionary
 /// - QuizContentMode: WordsOnly, PhrasesOnly, Mixed
 /// 
-/// SentencesOnly enumda vardır ama Sentence desteği Faz 19'a bırakıldığı için
-/// şu anda validation aşamasında engellenir.
+/// SentencesOnly enumda vardır ancak Faz 19'da sentence quiz kapsam dışı bırakılmıştır.
+/// Sentence lookup ve dictionary save desteklenir; quiz desteği Faz 21 Writing Quiz kapsamında ele alınacaktır.
 /// 
 /// ValidationBehavior bu validator'ı handler'dan önce otomatik çalıştırır.
 /// Hata varsa StartQuizCommandHandler'a hiç gidilmez.

@@ -40,6 +40,17 @@ public sealed class UserDictionaryItemResponse
     public Guid? PhraseId { get; init; }
 
 
+
+    /// <summary>
+    /// Eğer item Sentence ise Sentence entity id değeridir.
+    /// 
+    /// Word/Phrase itemlarında null olur.
+    /// Sentence itemlarında dolu olur.
+    /// Ana dictionary/progress akışı yine LearningItemId üzerinden ilerler.
+    /// </summary>
+    public Guid? SentenceId { get; init; }
+
+
     /// <summary>
     /// İçerik tipi.
     /// 
@@ -86,6 +97,15 @@ public sealed class UserDictionaryItemResponse
     /// Nullable olabilir.
     /// </summary>
     public Guid? SelectedMeaningId { get; init; }
+
+
+    /// <summary>
+    /// Eğer item Sentence ise gösterilecek ana cümle çevirisidir.
+    /// 
+    /// Word/Phrase itemlarında null olur.
+    /// Sentence itemlarında primary veya ilk sentence translation döner.
+    /// </summary>
+    public UserDictionarySentenceTranslationResponse? SentenceTranslation { get; init; }
 
     /// <summary>
     /// Kullanıcının seçtiği veya sistemin primary olarak belirlediği anlam bilgisidir.

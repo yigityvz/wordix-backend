@@ -1,22 +1,28 @@
 ﻿namespace Wordix.Application.Features.Lookups.Models;
 
 /// <summary>
-/// Dictionary provider lookup sonucunu temsil eder.
+/// Dictionary/translation provider lookup sonucunu temsil eder.
 /// 
 /// Bu model provider'dan gelen sonucu application katmanına taşır.
 /// Provider sonucu doğrudan entity değildir.
-/// Handler bu sonucu alıp gerekirse LearningItem, Word ve Meaning entity'lerine dönüştürür.
+/// Handler bu sonucu alıp gerekirse entity'lere dönüştürür.
+/// 
+/// Faz 19 kararı:
+/// - Word/Phrase için provider sonucu Meanings koleksiyonunu doldurur.
+/// - Sentence için provider sonucu SentenceTranslations koleksiyonunu doldurur.
+/// - Sentence lookup anında LearningItem/Sentence/SentenceTranslation entity oluşturulmaz.
+///   Kalıcı kayıt sadece kullanıcı dictionary'ye kaydetmek isterse oluşturulur.
 /// </summary>
 public sealed class DictionaryProviderResult
 {
     /// <summary>
-    /// Provider'ın bu kelime için sonuç bulup bulmadığını gösterir.
+    /// Provider'ın bu lookup için sonuç bulup bulmadığını gösterir.
     /// 
-    /// true:
-    /// Provider anlam buldu.
+    /// Word/Phrase için:
+    /// Meanings doluysa true olur.
     /// 
-    /// false:
-    /// Provider bu kelime için sonuç bulamadı.
+    /// Sentence için:
+    /// SentenceTranslations doluysa true olur.
     /// </summary>
     public bool Found { get; init; }
 
@@ -25,8 +31,8 @@ public sealed class DictionaryProviderResult
     /// 
     /// Örnek:
     /// achieve
-    /// improve
-    /// perfect
+    /// give up
+    /// i want to improve my english
     /// </summary>
     public string NormalizedText { get; init; } = string.Empty;
 
@@ -52,19 +58,31 @@ public sealed class DictionaryProviderResult
     /// Örnek:
     /// - PrototypeProvider
     /// - ExternalDictionaryApi
+    /// - TranslationApi
     /// - ImportProvider
-    /// 
-    /// Faz 13'te PrototypeProvider kullanacağız.
     /// </summary>
     public string ProviderName { get; init; } = string.Empty;
 
     /// <summary>
-    /// Provider'dan gelen anlam listesidir.
+    /// Provider'dan gelen Word/Phrase anlam listesidir.
     /// 
-    /// Bir kelimenin birden fazla anlamı olabilir.
+    /// Word/Phrase lookup için kullanılır.
+    /// Sentence lookup için boş kalır.
     /// </summary>
     public IReadOnlyCollection<DictionaryProviderMeaning> Meanings { get; init; }
         = Array.Empty<DictionaryProviderMeaning>();
+
+    /// <summary>
+    /// Provider'dan gelen sentence translation listesidir.
+    /// 
+    /// Sentence lookup için kullanılır.
+    /// Word/Phrase lookup için boş kalır.
+    /// 
+    /// Bu alanı ayrı tutuyoruz çünkü sentence çevirisi,
+    /// Word/Phrase anlamı ile aynı domain kavramı değildir.
+    /// </summary>
+    public IReadOnlyCollection<DictionaryProviderSentenceTranslation> SentenceTranslations { get; init; }
+        = Array.Empty<DictionaryProviderSentenceTranslation>();
 
     /// <summary>
     /// Sonuç bulunamadığında standart empty result üretir.
@@ -86,12 +104,16 @@ public sealed class DictionaryProviderResult
             SourceLanguageCode = sourceLanguageCode,
             TargetLanguageCode = targetLanguageCode,
             ProviderName = providerName,
-            Meanings = Array.Empty<DictionaryProviderMeaning>()
+            Meanings = Array.Empty<DictionaryProviderMeaning>(),
+            SentenceTranslations = Array.Empty<DictionaryProviderSentenceTranslation>()
         };
     }
 
     /// <summary>
-    /// Sonuç bulunduğunda standart found result üretir.
+    /// Word/Phrase sonucu bulunduğunda standart found result üretir.
+    /// 
+    /// Bu method mevcut Word/Phrase akışını bozmamak için korunur.
+    /// Sentence için SentenceFoundResult kullanılmalıdır.
     /// </summary>
     public static DictionaryProviderResult FoundResult(
         string normalizedText,
@@ -107,7 +129,35 @@ public sealed class DictionaryProviderResult
             SourceLanguageCode = sourceLanguageCode,
             TargetLanguageCode = targetLanguageCode,
             ProviderName = providerName,
-            Meanings = meanings
+            Meanings = meanings,
+            SentenceTranslations = Array.Empty<DictionaryProviderSentenceTranslation>()
+        };
+    }
+
+    /// <summary>
+    /// Sentence translation sonucu bulunduğunda standart found result üretir.
+    /// 
+    /// Sentence lookup, Word/Phrase lookup'tan farklıdır:
+    /// - Meanings oluşturmaz.
+    /// - SentenceTranslations döner.
+    /// - Lookup anında database'e Sentence/SentenceTranslation yazılmaz.
+    /// </summary>
+    public static DictionaryProviderResult SentenceFoundResult(
+        string normalizedText,
+        string sourceLanguageCode,
+        string targetLanguageCode,
+        string providerName,
+        IReadOnlyCollection<DictionaryProviderSentenceTranslation> sentenceTranslations)
+    {
+        return new DictionaryProviderResult
+        {
+            Found = true,
+            NormalizedText = normalizedText,
+            SourceLanguageCode = sourceLanguageCode,
+            TargetLanguageCode = targetLanguageCode,
+            ProviderName = providerName,
+            Meanings = Array.Empty<DictionaryProviderMeaning>(),
+            SentenceTranslations = sentenceTranslations
         };
     }
 }

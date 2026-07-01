@@ -50,12 +50,7 @@ public static class LookupMapper
     }
 
     /// <summary>
-    /// Database'den bulunan lookup sonucunu API response DTO'suna dönüştürür.
-    /// 
-    /// Bu method sadece mapping yapar.
-    /// Database'e gitmez.
-    /// Repository kullanmaz.
-    /// SaveChanges çağırmaz.
+    /// Database'den bulunan word lookup sonucunu API response DTO'suna dönüştürür.
     /// </summary>
     public static LookupResponse ToDatabaseLookupResponse(
         CreateLookupCommand request,
@@ -77,6 +72,7 @@ public static class LookupMapper
             LearningItemId = databaseLookupData.LearningItem.Id,
             WordId = databaseLookupData.Word.Id,
             PhraseId = null,
+            SentenceId = null,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
@@ -85,18 +81,13 @@ public static class LookupMapper
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = DatabaseLookupSource,
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings)
+            Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings),
+            SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
         };
     }
 
-
     /// <summary>
     /// Database'den bulunan phrase lookup sonucunu API response DTO'suna dönüştürür.
-    /// 
-    /// Bu method sadece mapping yapar.
-    /// Database'e gitmez.
-    /// Repository kullanmaz.
-    /// SaveChanges çağırmaz.
     /// </summary>
     public static LookupResponse ToDatabaseLookupResponse(
         CreateLookupCommand request,
@@ -118,6 +109,7 @@ public static class LookupMapper
             LearningItemId = databaseLookupData.LearningItem.Id,
             WordId = null,
             PhraseId = databaseLookupData.Phrase.Id,
+            SentenceId = null,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
@@ -126,13 +118,13 @@ public static class LookupMapper
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = DatabaseLookupSource,
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings)
+            Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings),
+            SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
         };
     }
 
-
     /// <summary>
-    /// Provider'dan gelen ve sisteme yeni eklenen lookup sonucunu API response DTO'suna dönüştürür.
+    /// Provider'dan gelen ve sisteme yeni eklenen word lookup sonucunu API response DTO'suna dönüştürür.
     /// 
     /// Bu method LearningItem, Word, Meaning ve LookupHistory entity'lerini oluşturmaz.
     /// Onlar handler/use-case tarafında oluşturulur.
@@ -164,6 +156,7 @@ public static class LookupMapper
             LearningItemId = learningItem.Id,
             WordId = word.Id,
             PhraseId = null,
+            SentenceId = null,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
@@ -172,11 +165,10 @@ public static class LookupMapper
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = providerResult.ProviderName,
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = ToLookupMeaningResponses(meanings)
+            Meanings = ToLookupMeaningResponses(meanings),
+            SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
         };
     }
-
-
 
     /// <summary>
     /// Provider'dan gelen ve sisteme yeni eklenen phrase lookup sonucunu API response DTO'suna dönüştürür.
@@ -211,6 +203,7 @@ public static class LookupMapper
             LearningItemId = learningItem.Id,
             WordId = null,
             PhraseId = phrase.Id,
+            SentenceId = null,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
@@ -219,7 +212,50 @@ public static class LookupMapper
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = providerResult.ProviderName,
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
-            Meanings = ToLookupMeaningResponses(meanings)
+            Meanings = ToLookupMeaningResponses(meanings),
+            SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
+        };
+    }
+
+    /// <summary>
+    /// Provider'dan gelen sentence translation sonucunu API response DTO'suna dönüştürür.
+    /// 
+    /// Faz 19 kararı:
+    /// - Sentence lookup translation use-case gibi çalışır.
+    /// - Lookup anında LearningItem/Sentence/SentenceTranslation oluşturulmaz.
+    /// - Bu yüzden LearningItemId, SentenceId ve SentenceTranslationId null dönebilir.
+    /// - Kullanıcı sentence'i dictionary'ye kaydederse kalıcı kayıt save akışında oluşur.
+    /// </summary>
+    public static LookupResponse ToProviderSentenceLookupResponse(
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        DictionaryProviderResult providerResult,
+        LookupHistory lookupHistory)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceLanguage);
+        ArgumentNullException.ThrowIfNull(targetLanguage);
+        ArgumentNullException.ThrowIfNull(providerResult);
+        ArgumentNullException.ThrowIfNull(lookupHistory);
+
+        return new LookupResponse
+        {
+            LearningItemId = null,
+            WordId = null,
+            PhraseId = null,
+            SentenceId = null,
+            LookupHistoryId = lookupHistory.Id,
+            Text = request.Text,
+            NormalizedText = normalizedText,
+            ItemType = LearningItemType.Sentence.ToString(),
+            SourceLanguageCode = sourceLanguage.Code,
+            TargetLanguageCode = targetLanguage.Code,
+            LookupSource = providerResult.ProviderName,
+            IsAlreadyInUserDictionary = false,
+            Meanings = Array.Empty<LookupMeaningResponse>(),
+            SentenceTranslations = ToLookupSentenceTranslationResponses(providerResult.SentenceTranslations)
         };
     }
 
@@ -257,6 +293,39 @@ public static class LookupMapper
             Definition = meaning.ShortDefinition,
             ExampleSentence = null,
             PartOfSpeech = meaning.PartOfSpeech
+        };
+    }
+
+    /// <summary>
+    /// Provider sentence translation listesini API response DTO listesine çevirir.
+    /// 
+    /// Provider sonucu entity değildir.
+    /// Bu yüzden SentenceTranslationId null atanır.
+    /// </summary>
+    public static IReadOnlyCollection<LookupSentenceTranslationResponse> ToLookupSentenceTranslationResponses(
+        IReadOnlyCollection<DictionaryProviderSentenceTranslation> sentenceTranslations)
+    {
+        ArgumentNullException.ThrowIfNull(sentenceTranslations);
+
+        return sentenceTranslations
+            .Select(ToLookupSentenceTranslationResponse)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Tek bir provider sentence translation modelini response DTO'ya çevirir.
+    /// </summary>
+    public static LookupSentenceTranslationResponse ToLookupSentenceTranslationResponse(
+        DictionaryProviderSentenceTranslation sentenceTranslation)
+    {
+        ArgumentNullException.ThrowIfNull(sentenceTranslation);
+
+        return new LookupSentenceTranslationResponse
+        {
+            SentenceTranslationId = null,
+            TranslatedText = sentenceTranslation.TranslatedText,
+            SourceProvider = sentenceTranslation.SourceProvider,
+            License = sentenceTranslation.License
         };
     }
 

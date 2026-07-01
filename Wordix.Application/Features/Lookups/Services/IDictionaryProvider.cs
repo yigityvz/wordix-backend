@@ -16,7 +16,7 @@ namespace Wordix.Application.Features.Lookups.Services;
 public interface IDictionaryProvider
 {
     /// <summary>
-    /// Normalize edilmiş text için provider üzerinden anlam arar.
+    /// Normalize edilmiş text için provider üzerinden anlam veya sentence çevirisi arar.
     /// 
     /// Önemli:
     /// Bu method entity döndürmez.
@@ -27,7 +27,11 @@ public interface IDictionaryProvider
     /// <param name="sourceLanguageCode">Kaynak dil kodu. Örnek: en</param>
     /// <param name="targetLanguageCode">Hedef dil kodu. Örnek: tr</param>
     /// <param name="cancellationToken">Async operasyon iptal token'ı.</param>
-    /// <returns>Provider lookup sonucu.</returns>
+    /// <returns>
+    /// Provider lookup sonucu.
+    /// Word/Phrase için Meanings koleksiyonu,
+    /// Sentence için SentenceTranslations koleksiyonu dolu olabilir.
+    /// </returns>
     Task<DictionaryProviderResult> FindAsync(
         string normalizedText,
         string sourceLanguageCode,

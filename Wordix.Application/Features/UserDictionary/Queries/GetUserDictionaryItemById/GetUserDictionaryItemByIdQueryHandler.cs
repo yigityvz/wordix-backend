@@ -37,6 +37,8 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
     private readonly IRepository<Phrase> _phraseRepository;
+    private readonly IRepository<Sentence> _sentenceRepository;
+    private readonly IRepository<SentenceTranslation> _sentenceTranslationRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
@@ -57,6 +59,8 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
         IRepository<Phrase> phraseRepository,
+        IRepository<Sentence> sentenceRepository,
+        IRepository<SentenceTranslation> sentenceTranslationRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
@@ -66,6 +70,8 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
         _phraseRepository = phraseRepository;
+        _sentenceRepository = sentenceRepository;
+        _sentenceTranslationRepository = sentenceTranslationRepository;
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
@@ -136,6 +142,13 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             phrase => phrase.LearningItemId == learningItem.Id,
             cancellationToken);
 
+
+        // LearningItem Sentence ise Sentence detayını alıyoruz.
+        // Word/Phrase itemlarında bu sorgu null döner.
+        var sentence = await _sentenceRepository.FirstOrDefaultAsync(
+            sentence => sentence.LearningItemId == learningItem.Id,
+            cancellationToken);
+
         // 6. LearningItem'ın source language bilgisini alıyoruz.
         var sourceLanguage = await _languageRepository.FirstOrDefaultAsync(
             language => language.Id == learningItem.LanguageId,
@@ -145,6 +158,28 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         var meanings = await _meaningRepository.ListAsync(
             meaning => meaning.LearningItemId == learningItem.Id,
             cancellationToken);
+
+        SentenceTranslation? sentenceTranslation = null;
+        Language? targetLanguage = null;
+
+        if (sentence is not null)
+        {
+            var sentenceTranslations = await _sentenceTranslationRepository.ListAsync(
+                translation => translation.SourceSentenceId == sentence.Id,
+                cancellationToken);
+
+            sentenceTranslation = sentenceTranslations
+                .OrderByDescending(translation => translation.IsPrimary)
+                .ThenBy(translation => translation.DisplayOrder)
+                .FirstOrDefault();
+
+            if (sentenceTranslation is not null)
+            {
+                targetLanguage = await _languageRepository.FirstOrDefaultAsync(
+                    language => language.Id == sentenceTranslation.TargetLanguageId,
+                    cancellationToken);
+            }
+        }
 
         // 8. Bu dictionary item'a ait progress kaydını alıyoruz.
         var progress = await _userLearningProgressRepository.FirstOrDefaultAsync(
@@ -160,8 +195,11 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             learningItem: learningItem,
             word: word,
             phrase: phrase,
+            sentence: sentence,
             sourceLanguage: sourceLanguage,
             meanings: meanings,
+            sentenceTranslation: sentenceTranslation,
+            targetLanguage: targetLanguage,
             progress: progress);
     }
 

@@ -36,6 +36,8 @@ public sealed class GetMyDictionaryQueryHandler
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
     private readonly IRepository<Phrase> _phraseRepository;
+    private readonly IRepository<Sentence> _sentenceRepository;
+    private readonly IRepository<SentenceTranslation> _sentenceTranslationRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
@@ -56,6 +58,8 @@ public sealed class GetMyDictionaryQueryHandler
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
         IRepository<Phrase> phraseRepository,
+        IRepository<Sentence> sentenceRepository,
+        IRepository<SentenceTranslation> sentenceTranslationRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
@@ -65,6 +69,8 @@ public sealed class GetMyDictionaryQueryHandler
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
         _phraseRepository = phraseRepository;
+        _sentenceRepository = sentenceRepository;
+        _sentenceTranslationRepository = sentenceTranslationRepository;
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
@@ -130,6 +136,19 @@ public sealed class GetMyDictionaryQueryHandler
 
         var phraseLookup = phrases.ToDictionary(phrase => phrase.LearningItemId);
 
+        // Sentence detaylarını LearningItemId üzerinden toplu çekiyoruz.
+        // Faz 19 itibarıyla dictionary listesi Word/Phrase yanında Sentence itemları da gösterebilir.
+        var sentences = await _sentenceRepository.ListAsync(
+            sentence =>
+                sentence.LearningItemId.HasValue &&
+                learningItemIds.Contains(sentence.LearningItemId.Value),
+            cancellationToken);
+
+        var sentenceLookup = sentences
+            .Where(sentence => sentence.LearningItemId.HasValue)
+            .ToDictionary(sentence => sentence.LearningItemId!.Value);
+
+
         // 6. Meaning kayıtlarını toplu alıyoruz.
         // SelectedMeaning veya primary meaning mapping için kullanılacak.
         var meanings = await _meaningRepository.ListAsync(
@@ -144,6 +163,29 @@ public sealed class GetMyDictionaryQueryHandler
                     .OrderBy(meaning => meaning.DisplayOrder)
                     .ToArray());
 
+
+        // SentenceTranslation kayıtlarını toplu alıyoruz.
+        // Sentence itemları Meaning kullanmaz; tam cümle çevirisi SentenceTranslation tablosundadır.
+        var sentenceIds = sentences
+            .Select(sentence => sentence.Id)
+            .Distinct()
+            .ToArray();
+
+        var sentenceTranslations = sentenceIds.Length == 0
+            ? Array.Empty<SentenceTranslation>()
+            : await _sentenceTranslationRepository.ListAsync(
+                translation => sentenceIds.Contains(translation.SourceSentenceId),
+                cancellationToken);
+
+        var sentenceTranslationsBySentenceId = sentenceTranslations
+            .GroupBy(translation => translation.SourceSentenceId)
+            .ToDictionary(
+                group => group.Key,
+                group => group
+                    .OrderByDescending(translation => translation.IsPrimary)
+                    .ThenBy(translation => translation.DisplayOrder)
+                    .ToArray());
+
         // 7. Progress kayıtlarını toplu alıyoruz.
         // UserLearningProgress, UserLearningItemId üzerinden bire bir bağlıdır.
         var progresses = await _userLearningProgressRepository.ListAsync(
@@ -155,6 +197,7 @@ public sealed class GetMyDictionaryQueryHandler
         // 8. Source language bilgilerini toplu almak için LearningItem.LanguageId değerlerini çıkarıyoruz.
         var languageIds = learningItems
             .Select(item => item.LanguageId)
+            .Concat(sentenceTranslations.Select(translation => translation.TargetLanguageId))
             .Distinct()
             .ToArray();
 
@@ -171,6 +214,8 @@ public sealed class GetMyDictionaryQueryHandler
                 learningItemLookup: learningItemLookup,
                 wordLookup: wordLookup,
                 phraseLookup: phraseLookup,
+                sentenceLookup: sentenceLookup,
+                sentenceTranslationsBySentenceId: sentenceTranslationsBySentenceId,
                 meaningsByLearningItemId: meaningsByLearningItemId,
                 progressLookup: progressLookup,
                 languageLookup: languageLookup))

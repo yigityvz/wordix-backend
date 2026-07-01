@@ -3,6 +3,7 @@ using Wordix.Application.Features.UserDictionary.Dtos.Requests;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.UserDictionary.Commands.SaveSentenceToDictionary;
 
 namespace Wordix.Application.Features.UserDictionary.Mappers;
 
@@ -42,6 +43,27 @@ public static class UserDictionaryMapper
         };
     }
 
+
+    /// <summary>
+    /// API request DTO'sunu SaveSentenceToDictionaryCommand modeline dönüştürür.
+    /// 
+    /// Controller null body kontrolü yapmaz.
+    /// Request null gelirse string alanlar boş gelir.
+    /// SaveSentenceToDictionaryCommandValidator bunu ValidationBehavior üzerinden yakalar.
+    /// </summary>
+    public static SaveSentenceToDictionaryCommand ToSaveSentenceToDictionaryCommand(
+        SaveSentenceToDictionaryRequest? request)
+    {
+        return new SaveSentenceToDictionaryCommand
+        {
+            SourceText = request?.SourceText ?? string.Empty,
+            TranslatedText = request?.TranslatedText ?? string.Empty,
+            SourceLanguageCode = request?.SourceLanguageCode ?? string.Empty,
+            TargetLanguageCode = request?.TargetLanguageCode ?? string.Empty,
+            SourceLookupHistoryId = request?.SourceLookupHistoryId
+        };
+    }
+
     /// <summary>
     /// Yeni dictionary kaydı oluşturulduktan sonra API'ye dönecek response modelini üretir.
     /// 
@@ -63,6 +85,45 @@ public static class UserDictionaryMapper
             UserLearningItemId = userLearningItem.Id,
             LearningItemId = learningItem.Id,
             SelectedMeaningId = userLearningItem.SelectedMeaningId,
+            UserLearningProgressId = userLearningProgress.Id,
+            SourceLookupHistoryId = userLearningItem.SourceLookupHistoryId,
+            SavedAt = userLearningItem.SavedAt,
+            LearningStatus = userLearningProgress.LearningStatus.ToString(),
+            LearningConfidenceScore = userLearningProgress.LearningConfidenceScore,
+            IsActive = userLearningItem.IsActive
+        };
+    }
+
+    /// <summary>
+    /// Sentence dictionary kaydı oluşturulduktan sonra API'ye dönecek response modelini üretir.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Repository kullanmaz.
+    /// SaveChanges çağırmaz.
+    /// </summary>
+    public static SaveSentenceToDictionaryResponse ToSaveSentenceToDictionaryResponse(
+        UserLearningItem userLearningItem,
+        LearningItem learningItem,
+        Sentence sentence,
+        SentenceTranslation sentenceTranslation,
+        UserLearningProgress userLearningProgress)
+    {
+        ArgumentNullException.ThrowIfNull(userLearningItem);
+        ArgumentNullException.ThrowIfNull(learningItem);
+        ArgumentNullException.ThrowIfNull(sentence);
+        ArgumentNullException.ThrowIfNull(sentenceTranslation);
+        ArgumentNullException.ThrowIfNull(userLearningProgress);
+
+        return new SaveSentenceToDictionaryResponse
+        {
+            UserLearningItemId = userLearningItem.Id,
+            LearningItemId = learningItem.Id,
+            SentenceId = sentence.Id,
+            SentenceTranslationId = sentenceTranslation.Id,
+            SourceText = sentence.Text,
+            NormalizedSourceText = sentence.NormalizedText,
+            TranslatedText = sentenceTranslation.TranslatedText,
+            NormalizedTranslatedText = sentenceTranslation.NormalizedTranslatedText,
             UserLearningProgressId = userLearningProgress.Id,
             SourceLookupHistoryId = userLearningItem.SourceLookupHistoryId,
             SavedAt = userLearningItem.SavedAt,
@@ -110,7 +171,9 @@ public static class UserDictionaryMapper
         IReadOnlyDictionary<Guid, LearningItem> learningItemLookup,
         IReadOnlyDictionary<Guid, Word> wordLookup,
         IReadOnlyDictionary<Guid, Phrase> phraseLookup,
+        IReadOnlyDictionary<Guid, Sentence> sentenceLookup,
         IReadOnlyDictionary<Guid, Meaning[]> meaningsByLearningItemId,
+        IReadOnlyDictionary<Guid, SentenceTranslation[]> sentenceTranslationsBySentenceId,
         IReadOnlyDictionary<Guid, UserLearningProgress> progressLookup,
         IReadOnlyDictionary<Guid, Language> languageLookup)
     {
@@ -118,6 +181,8 @@ public static class UserDictionaryMapper
         ArgumentNullException.ThrowIfNull(learningItemLookup);
         ArgumentNullException.ThrowIfNull(wordLookup);
         ArgumentNullException.ThrowIfNull(phraseLookup);
+        ArgumentNullException.ThrowIfNull(sentenceLookup);
+        ArgumentNullException.ThrowIfNull(sentenceTranslationsBySentenceId);
         ArgumentNullException.ThrowIfNull(meaningsByLearningItemId);
         ArgumentNullException.ThrowIfNull(progressLookup);
         ArgumentNullException.ThrowIfNull(languageLookup);
@@ -131,17 +196,35 @@ public static class UserDictionaryMapper
 
         wordLookup.TryGetValue(learningItem.Id, out var word);
         phraseLookup.TryGetValue(learningItem.Id, out var phrase);
+        sentenceLookup.TryGetValue(learningItem.Id, out var sentence);
         languageLookup.TryGetValue(learningItem.LanguageId, out var sourceLanguage);
         meaningsByLearningItemId.TryGetValue(learningItem.Id, out var meanings);
         progressLookup.TryGetValue(userLearningItem.Id, out var progress);
+
+        SentenceTranslation? sentenceTranslation = null;
+        Language? targetLanguage = null;
+
+        if (sentence is not null &&
+            sentenceTranslationsBySentenceId.TryGetValue(sentence.Id, out var sentenceTranslations))
+        {
+            sentenceTranslation = ResolveSentenceTranslation(sentenceTranslations);
+
+            if (sentenceTranslation is not null)
+            {
+                languageLookup.TryGetValue(sentenceTranslation.TargetLanguageId, out targetLanguage);
+            }
+        }
 
         return ToUserDictionaryItemResponse(
             userLearningItem: userLearningItem,
             learningItem: learningItem,
             word: word,
             phrase: phrase,
+            sentence: sentence,
             sourceLanguage: sourceLanguage,
             meanings: meanings ?? Array.Empty<Meaning>(),
+            sentenceTranslation: sentenceTranslation,
+            targetLanguage: targetLanguage,
             progress: progress);
     }
 
@@ -156,8 +239,11 @@ public static class UserDictionaryMapper
         LearningItem learningItem,
         Word? word,
         Phrase? phrase,
+        Sentence? sentence,
         Language? sourceLanguage,
         IReadOnlyCollection<Meaning> meanings,
+        SentenceTranslation? sentenceTranslation,
+        Language? targetLanguage,
         UserLearningProgress? progress)
     {
         ArgumentNullException.ThrowIfNull(userLearningItem);
@@ -174,14 +260,18 @@ public static class UserDictionaryMapper
             LearningItemId = learningItem.Id,
             WordId = word?.Id,
             PhraseId = phrase?.Id,
+            SentenceId = sentence?.Id,
             ItemType = learningItem.ItemType.ToString(),
-            DisplayText = ResolveDisplayText(learningItem, word, phrase),
-            NormalizedText = ResolveNormalizedText(learningItem, word, phrase),
+            DisplayText = ResolveDisplayText(learningItem, word, phrase, sentence),
+            NormalizedText = ResolveNormalizedText(learningItem, word, phrase, sentence),
             SourceLanguageCode = sourceLanguage?.Code ?? string.Empty,
             SelectedMeaningId = selectedMeaning?.Id,
             SelectedMeaning = selectedMeaning is null
-                ? null
-                : ToUserDictionaryMeaningResponse(selectedMeaning),
+        ? null
+        : ToUserDictionaryMeaningResponse(selectedMeaning),
+            SentenceTranslation = sentenceTranslation is null
+        ? null
+        : ToUserDictionarySentenceTranslationResponse(sentenceTranslation, targetLanguage),
             SavedAt = userLearningItem.SavedAt,
             SourceLookupHistoryId = userLearningItem.SourceLookupHistoryId,
             LearningStatus = progress?.LearningStatus.ToString() ?? string.Empty,
@@ -208,6 +298,27 @@ public static class UserDictionaryMapper
             DisplayOrder = meaning.DisplayOrder
         };
     }
+
+
+    /// <summary>
+    /// SentenceTranslation entity'sini UserDictionarySentenceTranslationResponse DTO'suna dönüştürür.
+    /// </summary>
+    public static UserDictionarySentenceTranslationResponse ToUserDictionarySentenceTranslationResponse(
+        SentenceTranslation sentenceTranslation,
+        Language? targetLanguage)
+    {
+        ArgumentNullException.ThrowIfNull(sentenceTranslation);
+
+        return new UserDictionarySentenceTranslationResponse
+        {
+            SentenceTranslationId = sentenceTranslation.Id,
+            TranslatedText = sentenceTranslation.TranslatedText,
+            TargetLanguageCode = targetLanguage?.Code ?? string.Empty,
+            IsPrimary = sentenceTranslation.IsPrimary,
+            DisplayOrder = sentenceTranslation.DisplayOrder
+        };
+    }
+
 
     /// <summary>
     /// Kullanıcının seçtiği meaning'i çözer.
@@ -253,24 +364,48 @@ public static class UserDictionaryMapper
             .FirstOrDefault();
     }
 
+
     /// <summary>
-    /// LearningItem tipine göre kullanıcıya gösterilecek ana metni çözer.
+    /// Sentence için gösterilecek ana çeviriyi çözer.
     /// 
-    /// Word için Word.Text,
-    /// Phrase için Phrase.Text kullanılır.
-    /// 
-    /// Bu mapping kuralını handler içinde tutmuyoruz.
-    /// Çünkü handler veri toplar; response gösterim kuralı mapper'ın sorumluluğudur.
+    /// Öncelik sırası:
+    /// 1. IsPrimary olan translation
+    /// 2. DisplayOrder'a göre ilk translation
+    /// 3. null
     /// </summary>
+    private static SentenceTranslation? ResolveSentenceTranslation(
+        IReadOnlyCollection<SentenceTranslation> sentenceTranslations)
+    {
+        if (sentenceTranslations.Count == 0)
+        {
+            return null;
+        }
+
+        var primaryTranslation = sentenceTranslations.FirstOrDefault(
+            translation => translation.IsPrimary);
+
+        if (primaryTranslation is not null)
+        {
+            return primaryTranslation;
+        }
+
+        return sentenceTranslations
+            .OrderBy(translation => translation.DisplayOrder)
+            .FirstOrDefault();
+    }
+
+
     private static string ResolveDisplayText(
         LearningItem learningItem,
         Word? word,
-        Phrase? phrase)
+        Phrase? phrase,
+        Sentence? sentence)
     {
         return learningItem.ItemType switch
         {
             LearningItemType.Word => word?.Text ?? string.Empty,
             LearningItemType.Phrase => phrase?.Text ?? string.Empty,
+            LearningItemType.Sentence => sentence?.Text ?? string.Empty,
             _ => string.Empty
         };
     }
@@ -284,12 +419,14 @@ public static class UserDictionaryMapper
     private static string ResolveNormalizedText(
         LearningItem learningItem,
         Word? word,
-        Phrase? phrase)
+        Phrase? phrase,
+        Sentence? sentence)
     {
         return learningItem.ItemType switch
         {
             LearningItemType.Word => word?.NormalizedText ?? string.Empty,
             LearningItemType.Phrase => phrase?.NormalizedText ?? string.Empty,
+            LearningItemType.Sentence => sentence?.NormalizedText ?? string.Empty,
             _ => string.Empty
         };
     }

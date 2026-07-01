@@ -96,6 +96,54 @@ public sealed class UserDictionaryController : ControllerBase
             value: apiResponse);
     }
 
+
+    /// <summary>
+    /// Kullanıcının sentence lookup sonucunu kendi dictionary'sine kaydetmesini sağlar.
+    /// 
+    /// Endpoint:
+    /// POST /api/user-dictionary/sentences
+    /// 
+    /// Örnek request:
+    /// {
+    ///   "sourceText": "I want to improve my English",
+    ///   "translatedText": "İngilizcemi geliştirmek istiyorum.",
+    ///   "sourceLanguageCode": "en",
+    ///   "targetLanguageCode": "tr",
+    ///   "sourceLookupHistoryId": "..."
+    /// }
+    /// 
+    /// Faz 19 kararı:
+    /// Sentence lookup anında kalıcı kayıt oluşturulmaz.
+    /// Kullanıcı sentence'i kaydetmek isterse LearningItem + Sentence + SentenceTranslation
+    /// bu endpoint üzerinden oluşturulur.
+    /// </summary>
+    [HttpPost("sentences")]
+    [ProducesResponseType(typeof(ApiResponse<SaveSentenceToDictionaryResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<SaveSentenceToDictionaryResponse>>> SaveSentenceToDictionary(
+        [FromBody] SaveSentenceToDictionaryRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToSaveSentenceToDictionaryCommand(request);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        var apiResponse = ApiResponse<SaveSentenceToDictionaryResponse>.Ok(
+            data: response,
+            message: "Sentence saved to dictionary successfully.");
+
+        return CreatedAtAction(
+            actionName: nameof(GetUserDictionaryItemById),
+            routeValues: new { id = response.UserLearningItemId },
+            value: apiResponse);
+    }
+
+
+
     /// <summary>
     /// Current user'ın kendi dictionary listesini döner.
     /// 

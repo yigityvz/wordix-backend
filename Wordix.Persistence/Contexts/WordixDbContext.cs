@@ -65,6 +65,26 @@ public class WordixDbContext : DbContext
     /// </summary>
     public DbSet<Phrase> Phrases => Set<Phrase>();
 
+
+    /// <summary>
+    /// Global sentence / cümle tablosudur.
+    /// 
+    /// Faz 19 kararı:
+    /// Her sentence lookup sonucu burada saklanmaz.
+    /// Kullanıcı cümleyi dictionary'ye kaydetmek isterse
+    /// veya ileride import/example sentence süreci çalışırsa Sentence kaydı oluşur.
+    /// </summary>
+    public DbSet<Sentence> Sentences => Set<Sentence>();
+
+    /// <summary>
+    /// Sentence kayıtlarının hedef dildeki çevirilerini tutar.
+    /// 
+    /// Word/Phrase anlamları Meaning tablosunda tutulurken,
+    /// tam cümle çevirileri SentenceTranslation tablosunda tutulur.
+    /// </summary>
+    public DbSet<SentenceTranslation> SentenceTranslations => Set<SentenceTranslation>();
+
+
     /// <summary>
     /// Word veya ileride Phrase anlamlarını tutar.
     /// </summary>

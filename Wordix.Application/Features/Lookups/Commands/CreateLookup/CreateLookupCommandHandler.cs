@@ -22,11 +22,13 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 /// - Current user bilgisinden KeycloakUserId değerini alır.
 /// - Text'i normalize eder.
 /// - Input tipini belirler.
-/// - Faz 18 itibarıyla Word ve Phrase lookup destekler.
-/// - Sentence lookup şimdilik Faz 19'a bırakılmıştır.
+/// - Word ve Phrase lookup sonucunu global içerik havuzuna kaydedebilir.
+/// - Sentence lookup sonucunu geçici translation response olarak döner.
+/// - Sentence kalıcı kayıtları sadece kullanıcı dictionary'ye kaydetmek isterse oluşturulur..
 /// - Önce local database'de kelime arar.
 /// - Bulamazsa dictionary provider çağırır.
-/// - Provider sonucu varsa LearningItem + Word + Meaning oluşturur.
+/// - Word/Phrase provider sonucu varsa LearningItem + Word/Phrase + Meaning oluşturur.
+/// - Sentence provider sonucu varsa sadece LookupHistory oluşturur ve translation response döner.
 /// - Her durumda uygun LookupHistory kaydı oluşturur.
 /// - Kullanıcıya LookupResponse döner.
 /// 
@@ -136,23 +138,12 @@ public sealed class CreateLookupCommandHandler
         // 4. Input Word/Phrase/Sentence mı belirliyoruz.
         var inputType = _lookupClassifier.Classify(normalizedText);
 
-        // 5. Faz 18 itibarıyla Word ve Phrase lookup desteklenir.
-        // Sentence ise ayrı Faz 19 kapsamında ele alınacaktır.
-        if (inputType is LookupInputType.Sentence)
-        {
-            await SaveUnsupportedLookupHistoryAsync(
-                keycloakUserId: keycloakUserId,
-                request: request,
-                normalizedText: normalizedText,
-                inputType: inputType,
-                sourceLanguageId: sourceLanguage.Id,
-                targetLanguageId: targetLanguage.Id,
-                cancellationToken: cancellationToken);
-
-            throw new BusinessRuleException(
-                "Sentence lookup is not supported yet. It will be handled in a later phase.",
-                "LOOKUP_INPUT_TYPE_NOT_SUPPORTED");
-        }
+        // 5. Word/Phrase için önce local database'de arama yapacağız.
+        //
+        // Sentence için bilinçli olarak database lookup yapmıyoruz.
+        // Çünkü Faz 19 kararına göre sentence lookup translation use-case gibi çalışır.
+        // Her sentence lookup sonucunu database'e yazmak istemiyoruz.
+        // Kullanıcı cümleyi kaydetmek isterse kalıcı Sentence save akışında oluşturulur.
 
         // 6. Önce local database'de arıyoruz.
         // Word ve Phrase için ayrı repository methodları kullanıyoruz.
@@ -234,6 +225,15 @@ public sealed class CreateLookupCommandHandler
                 cancellationToken: cancellationToken),
 
             LookupInputType.Phrase => await HandlePhraseProviderLookupResultAsync(
+                keycloakUserId: keycloakUserId,
+                request: request,
+                normalizedText: normalizedText,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                providerResult: providerResult,
+                cancellationToken: cancellationToken),
+
+            LookupInputType.Sentence => await HandleSentenceProviderLookupResultAsync(
                 keycloakUserId: keycloakUserId,
                 request: request,
                 normalizedText: normalizedText,
@@ -515,6 +515,62 @@ public sealed class CreateLookupCommandHandler
             lookupHistory: lookupHistory,
             isAlreadyInUserDictionary: isAlreadyInUserDictionary);
     }
+
+
+    /// <summary>
+    /// Provider'dan bulunan sentence translation sonucu için LookupHistory oluşturur ve LookupResponse döner.
+    /// 
+    /// Faz 19 kararı:
+    /// - Sentence lookup translation use-case olarak çalışır.
+    /// - Lookup anında LearningItem oluşturulmaz.
+    /// - Lookup anında Sentence oluşturulmaz.
+    /// - Lookup anında SentenceTranslation oluşturulmaz.
+    /// - Kalıcı kayıt sadece kullanıcı sentence'i dictionary'ye kaydetmek isterse oluşturulur.
+    /// </summary>
+    private async Task<LookupResponse> HandleSentenceProviderLookupResultAsync(
+        string keycloakUserId,
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        DictionaryProviderResult providerResult,
+        CancellationToken cancellationToken)
+    {
+        if (providerResult.SentenceTranslations.Count == 0)
+        {
+            throw new BusinessRuleException(
+                "Provider returned a sentence lookup result without any sentence translation.",
+                "SENTENCE_TRANSLATION_RESULT_EMPTY");
+        }
+
+        var lookupHistory = CreateLookupHistory(
+            keycloakUserId: keycloakUserId,
+            queryText: request.Text,
+            normalizedQueryText: normalizedText,
+            inputType: LookupInputType.Sentence,
+            sourceLanguageId: sourceLanguage.Id,
+            targetLanguageId: targetLanguage.Id,
+            learningItemId: null,
+            wasFoundInDatabase: false,
+            wasCreatedFromProvider: false,
+            providerName: providerResult.ProviderName,
+            resultCount: providerResult.SentenceTranslations.Count);
+
+        await _lookupHistoryRepository.AddAsync(lookupHistory, cancellationToken);
+
+        // Sentence lookup anında sadece LookupHistory kaydedilir.
+        // LearningItem/Sentence/SentenceTranslation kaydı yapılmaz.
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return LookupMapper.ToProviderSentenceLookupResponse(
+            request: request,
+            normalizedText: normalizedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            providerResult: providerResult,
+            lookupHistory: lookupHistory);
+    }
+
 
     /// <summary>
     /// Şu an desteklenmeyen input tipleri için lookup history kaydı oluşturur.

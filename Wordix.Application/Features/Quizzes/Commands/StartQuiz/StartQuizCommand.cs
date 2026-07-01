@@ -41,8 +41,8 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// - PhrasesOnly
     /// - Mixed
     /// 
-    /// SentencesOnly enumda vardır ama Sentence fazı henüz aktif olmadığı için
-    /// şimdilik desteklenmez.
+    /// SentencesOnly enumda vardır ancak Faz 19'da sentence quiz kapsam dışı bırakılmıştır.
+    /// Sentence quiz desteği Faz 21 Writing Quiz kapsamında ayrıca tasarlanacaktır.
     /// </summary>
     public string QuizContentMode { get; init; } = string.Empty;
 

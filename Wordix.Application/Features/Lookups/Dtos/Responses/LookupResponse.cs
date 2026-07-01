@@ -4,43 +4,53 @@
 /// Lookup işleminin başarılı sonucunda API'ye dönecek response modelidir.
 /// 
 /// Bu model frontend'e şunları anlatır:
-/// - Hangi LearningItem bulundu/oluşturuldu?
-/// - Bu LearningItem bir Word mü, Phrase mi, Sentence mı?
+/// - Hangi içerik bulundu/oluşturuldu?
+/// - Bu içerik Word mü, Phrase mi, Sentence mı?
 /// - Aranan metnin normalize edilmiş hali nedir?
 /// - Sonuç database'den mi geldi, provider'dan mı?
 /// - Kullanıcının dictionary'sinde zaten var mı?
-/// - Hangi anlamlar bulundu?
+/// - Word/Phrase için hangi anlamlar bulundu?
+/// - Sentence için hangi çeviriler bulundu?
 /// </summary>
 public sealed class LookupResponse
 {
     /// <summary>
     /// Lookup sonucunda bulunan veya oluşturulan LearningItem id değeridir.
     /// 
-    /// Wordix'te Word/Phrase/Sentence gibi öğrenilebilir her içerik LearningItem çatısı altında tutulur.
-    /// Wordix'te Word/Phrase/Sentence gibi öğrenilebilir her içerik LearningItem çatısı altında tutulur.
-    /// Faz 18 itibarıyla Word ve Phrase aktif olarak desteklenir..
+    /// Word/Phrase lookup sonucunda dolu olur.
+    /// Çünkü Word/Phrase lookup provider'dan gelirse global içerik havuzuna kaydedilir.
+    /// 
+    /// Sentence lookup sonucunda null olabilir.
+    /// Çünkü Faz 19 kararına göre sentence lookup sadece geçici translation sonucu döner.
+    /// Sentence ancak kullanıcı dictionary'ye kaydetmek isterse kalıcı LearningItem olur.
     /// </summary>
-    public Guid LearningItemId { get; init; }
+    public Guid? LearningItemId { get; init; }
 
     /// <summary>
     /// Eğer lookup sonucu bir Word ise Word entity'sinin id değeridir.
+    /// 
     /// Word lookup sonucunda dolu olur.
-    /// Phrase lookup sonucunda null olur.
+    /// Phrase/Sentence lookup sonucunda null olur.
     /// </summary>
     public Guid? WordId { get; init; }
-
 
     /// <summary>
     /// Eğer lookup sonucu bir Phrase ise Phrase entity'sinin id değeridir.
     /// 
-    /// Word lookup sonucunda null olur.
     /// Phrase lookup sonucunda dolu olur.
+    /// Word/Sentence lookup sonucunda null olur.
     /// 
-    /// Bu alan frontend'in içerik detay tipini ayırt etmesini kolaylaştırır.
     /// Ana öğrenme akışı yine LearningItemId üzerinden yürür.
     /// </summary>
     public Guid? PhraseId { get; init; }
 
+    /// <summary>
+    /// Eğer lookup sonucu bir Sentence ise Sentence entity'sinin id değeridir.
+    /// 
+    /// Sentence lookup anında kalıcı Sentence oluşturmadığımız için çoğu zaman null döner.
+    /// Kullanıcı cümleyi dictionary'ye kaydederse Sentence save akışında kalıcı hale gelir.
+    /// </summary>
+    public Guid? SentenceId { get; init; }
 
     /// <summary>
     /// Oluşturulan LookupHistory kaydının id değeridir.
@@ -55,6 +65,7 @@ public sealed class LookupResponse
     /// 
     /// Örnek:
     /// " Achieve "
+    /// "I want to improve my English"
     /// </summary>
     public string Text { get; init; } = string.Empty;
 
@@ -63,16 +74,17 @@ public sealed class LookupResponse
     /// 
     /// Örnek:
     /// " Achieve " → "achieve"
+    /// "I Want To Improve My English" → "i want to improve my english"
     /// </summary>
     public string NormalizedText { get; init; } = string.Empty;
 
     /// <summary>
     /// Lookup sonucunun içerik tipidir.
+    /// 
     /// Aktif desteklenen değerler:
     /// Word
     /// Phrase
-    /// 
-    /// Sentence enum/model tarafında düşünülmüştür ama Faz 19'a kadar aktif değildir.
+    /// Sentence
     /// </summary>
     public string ItemType { get; init; } = string.Empty;
 
@@ -106,16 +118,26 @@ public sealed class LookupResponse
     /// <summary>
     /// Bu learning item kullanıcının dictionary'sinde zaten var mı bilgisidir.
     /// 
-    /// Lookup yapmak, otomatik olarak dictionary'ye kaydetmek anlamına gelmez.
-    /// Kullanıcı isterse sonraki fazda SaveToDictionary endpointiyle kaydeder.
+    /// Word/Phrase için LearningItemId üzerinden kontrol edilebilir.
+    /// Sentence lookup anında LearningItem oluşmadığı için false döner.
+    /// Sentence dictionary'ye kaydedildiğinde ayrıca save endpointi çalışır.
     /// </summary>
     public bool IsAlreadyInUserDictionary { get; init; }
 
     /// <summary>
-    /// Lookup sonucunda bulunan anlam listesidir.
+    /// Word/Phrase lookup sonucunda bulunan anlam listesidir.
     /// 
-    /// Bir kelimenin birden fazla anlamı olabileceği için koleksiyon olarak tutulur.
+    /// Sentence lookup sonucunda boş döner.
+    /// Çünkü sentence çevirileri Meaning değil, SentenceTranslation kavramıdır.
     /// </summary>
     public IReadOnlyCollection<LookupMeaningResponse> Meanings { get; init; }
         = Array.Empty<LookupMeaningResponse>();
+
+    /// <summary>
+    /// Sentence lookup sonucunda bulunan cümle çevirileridir.
+    /// 
+    /// Word/Phrase lookup sonucunda boş döner.
+    /// </summary>
+    public IReadOnlyCollection<LookupSentenceTranslationResponse> SentenceTranslations { get; init; }
+        = Array.Empty<LookupSentenceTranslationResponse>();
 }

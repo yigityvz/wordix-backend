@@ -4,12 +4,12 @@ using Wordix.Application.Features.Lookups.Services;
 namespace Wordix.Infrastructure.Dictionary;
 
 /// <summary>
-/// Faz 13 için kullanılan basit prototype dictionary provider implementation'ıdır.
+/// Prototype dictionary/translation provider implementation'ıdır.
 /// 
 /// Bu provider ne yapar?
 /// - Dış API çağırmaz.
 /// - Import sistemi kurmaz.
-/// - Sadece birkaç sabit kelime için provider sonucu döndürür.
+/// - Sadece birkaç sabit word, phrase ve sentence için provider sonucu döndürür.
 /// 
 /// Neden Infrastructure katmanında?
 /// - IDictionaryProvider interface'i Application'dadır.
@@ -19,7 +19,7 @@ namespace Wordix.Infrastructure.Dictionary;
 /// Önemli:
 /// Bu mock kullanıcı veya fake authentication değildir.
 /// Auth, API, DB akışı gerçek kalır.
-/// Sadece dış dictionary provider henüz hazır olmadığı için prototype data adaptörü kullanıyoruz.
+/// Sadece dış dictionary/translation provider henüz hazır olmadığı için prototype data adaptörü kullanıyoruz.
 /// </summary>
 public sealed class PrototypeDictionaryProvider : IDictionaryProvider
 {
@@ -33,8 +33,6 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
     /// 
     /// Value:
     /// Provider'ın döndüreceği meaning listesi.
-    /// 
-    /// Bu listeyi büyük tutmuyoruz çünkü Faz 24'te gerçek provider/import sistemi ayrıca tasarlanacak.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<DictionaryProviderMeaning>> PrototypeWords
         = new Dictionary<string, IReadOnlyCollection<DictionaryProviderMeaning>>(StringComparer.OrdinalIgnoreCase)
@@ -71,7 +69,6 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
             }
         };
 
-
     /// <summary>
     /// Prototype provider için desteklenen phrase / kalıp ifadeler.
     /// 
@@ -84,81 +81,136 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
         {
             ["give up"] = new[]
             {
-            new DictionaryProviderMeaning
-            {
-                Translation = "vazgeçmek",
-                Definition = "To stop trying to do something.",
-                ExampleSentence = "Do not give up on your goals.",
-                PartOfSpeech = "phrasal verb"
-            }
+                new DictionaryProviderMeaning
+                {
+                    Translation = "vazgeçmek",
+                    Definition = "To stop trying to do something.",
+                    ExampleSentence = "Do not give up on your goals.",
+                    PartOfSpeech = "phrasal verb"
+                }
             },
             ["look after"] = new[]
             {
-            new DictionaryProviderMeaning
-            {
-                Translation = "ilgilenmek",
-                Definition = "To take care of someone or something.",
-                ExampleSentence = "I look after my little brother.",
-                PartOfSpeech = "phrasal verb"
-            }
+                new DictionaryProviderMeaning
+                {
+                    Translation = "ilgilenmek",
+                    Definition = "To take care of someone or something.",
+                    ExampleSentence = "I look after my little brother.",
+                    PartOfSpeech = "phrasal verb"
+                }
             },
             ["by the way"] = new[]
             {
-            new DictionaryProviderMeaning
-            {
-                Translation = "bu arada",
-                Definition = "Used to introduce a new or additional point.",
-                ExampleSentence = "By the way, I finished the task.",
-                PartOfSpeech = "expression"
-            }
+                new DictionaryProviderMeaning
+                {
+                    Translation = "bu arada",
+                    Definition = "Used to introduce a new or additional point.",
+                    ExampleSentence = "By the way, I finished the task.",
+                    PartOfSpeech = "expression"
+                }
             },
             ["take care of"] = new[]
             {
-            new DictionaryProviderMeaning
-            {
-                Translation = "ilgilenmek",
-                Definition = "To care for or be responsible for someone or something.",
-                ExampleSentence = "I will take care of this problem.",
-                PartOfSpeech = "expression"
-            }
+                new DictionaryProviderMeaning
+                {
+                    Translation = "halletmek",
+                    Definition = "To deal with or handle something.",
+                    ExampleSentence = "I will take care of this problem.",
+                    PartOfSpeech = "expression"
+                }
             },
-
             ["find out"] = new[]
-        {
-            new DictionaryProviderMeaning
             {
-                Translation = "öğrenip bulmak",
-                Definition = "To discover information.",
-                ExampleSentence = "I want to find out the truth.",
-                PartOfSpeech = "phrasal verb"
-            }
-        },
-                    ["come across"] = new[]
-        {
-            new DictionaryProviderMeaning
+                new DictionaryProviderMeaning
+                {
+                    Translation = "öğrenip bulmak",
+                    Definition = "To discover information.",
+                    ExampleSentence = "I want to find out the truth.",
+                    PartOfSpeech = "phrasal verb"
+                }
+            },
+            ["come across"] = new[]
             {
-                Translation = "rastlamak",
-                Definition = "To find or meet something by chance.",
-                ExampleSentence = "I came across an old photo.",
-                PartOfSpeech = "phrasal verb"
-            }
-        },
-                    ["set up"] = new[]
-        {
-            new DictionaryProviderMeaning
+                new DictionaryProviderMeaning
+                {
+                    Translation = "rastlamak",
+                    Definition = "To find or meet something by chance.",
+                    ExampleSentence = "I came across an old photo.",
+                    PartOfSpeech = "phrasal verb"
+                }
+            },
+            ["set up"] = new[]
             {
-                Translation = "kurmak",
-                Definition = "To prepare or arrange something for use.",
-                ExampleSentence = "We need to set up the system.",
-                PartOfSpeech = "phrasal verb"
+                new DictionaryProviderMeaning
+                {
+                    Translation = "kurmak",
+                    Definition = "To prepare or arrange something for use.",
+                    ExampleSentence = "We need to set up the system.",
+                    PartOfSpeech = "phrasal verb"
+                }
             }
-        }
-
         };
 
+    /// <summary>
+    /// Prototype provider için desteklenen sentence translation verileri.
+    /// 
+    /// Faz 19 kararı:
+    /// Sentence lookup translation use-case gibi çalışır.
+    /// Lookup anında LearningItem/Sentence/SentenceTranslation entity oluşturulmaz.
+    /// Bu veriler sadece response olarak döner.
+    /// Kullanıcı sentence'i dictionary'ye kaydederse kalıcı kayıt save akışında oluşturulur.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<DictionaryProviderSentenceTranslation>> PrototypeSentences
+        = new Dictionary<string, IReadOnlyCollection<DictionaryProviderSentenceTranslation>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["i have been working on this project for two weeks"] = new[]
+            {
+                new DictionaryProviderSentenceTranslation
+                {
+                    TranslatedText = "Bu proje üzerinde iki haftadır çalışıyorum.",
+                    SourceProvider = ProviderName,
+                    License = null
+                }
+            },
+            ["i want to improve my english"] = new[]
+            {
+                new DictionaryProviderSentenceTranslation
+                {
+                    TranslatedText = "İngilizcemi geliştirmek istiyorum.",
+                    SourceProvider = ProviderName,
+                    License = null
+                }
+            },
+            ["this is not what i expected"] = new[]
+            {
+                new DictionaryProviderSentenceTranslation
+                {
+                    TranslatedText = "Bu beklediğim şey değil.",
+                    SourceProvider = ProviderName,
+                    License = null
+                }
+            },
+            ["how can i solve this problem"] = new[]
+            {
+                new DictionaryProviderSentenceTranslation
+                {
+                    TranslatedText = "Bu problemi nasıl çözebilirim?",
+                    SourceProvider = ProviderName,
+                    License = null
+                }
+            }
+        };
 
     /// <summary>
-    /// Normalize edilmiş kelime için prototype provider içinde anlam arar.
+    /// Normalize edilmiş text için prototype provider içinde sonuç arar.
+    /// 
+    /// Arama sırası:
+    /// 1. Word
+    /// 2. Phrase
+    /// 3. Sentence
+    /// 
+    /// Provider burada entity tipi döndürmez.
+    /// Word/Phrase/Sentence kararını LookupClassifier + handler verir.
     /// </summary>
     public Task<DictionaryProviderResult> FindAsync(
         string normalizedText,
@@ -166,7 +218,7 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
         string targetLanguageCode,
         CancellationToken cancellationToken = default)
     {
-        // Faz 13 prototype provider sadece en → tr lookup destekler.
+        // Prototype provider sadece en → tr lookup destekler.
         // Farklı dil çifti gelirse sonuç bulunamadı kabul ediyoruz.
         if (!IsSupportedLanguagePair(sourceLanguageCode, targetLanguageCode))
         {
@@ -189,8 +241,6 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
         }
 
         // Kelime bulunamazsa phrase/veri havuzunda arıyoruz.
-        // Provider burada entity tipi döndürmez.
-        // Word mü Phrase mi kararını LookupClassifier + handler verir.
         if (PrototypePhrases.TryGetValue(normalizedText, out var phraseMeanings))
         {
             return Task.FromResult(DictionaryProviderResult.FoundResult(
@@ -201,18 +251,31 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
                 meanings: phraseMeanings));
         }
 
+        // Word/Phrase bulunamazsa sentence translation havuzunda arıyoruz.
+        //
+        // Sentence sonucu Meaning değildir.
+        // Bu yüzden SentenceFoundResult ile SentenceTranslations koleksiyonu döndürülür.
+        if (PrototypeSentences.TryGetValue(normalizedText, out var sentenceTranslations))
+        {
+            return Task.FromResult(DictionaryProviderResult.SentenceFoundResult(
+                normalizedText: normalizedText,
+                sourceLanguageCode: sourceLanguageCode,
+                targetLanguageCode: targetLanguageCode,
+                providerName: ProviderName,
+                sentenceTranslations: sentenceTranslations));
+        }
+
         return Task.FromResult(DictionaryProviderResult.NotFound(
             normalizedText: normalizedText,
             sourceLanguageCode: sourceLanguageCode,
             targetLanguageCode: targetLanguageCode,
             providerName: ProviderName));
-
     }
 
     /// <summary>
     /// Prototype provider'ın desteklediği dil çiftini kontrol eder.
     /// 
-    /// İlk prototip:
+    /// Prototype:
     /// en → tr
     /// </summary>
     private static bool IsSupportedLanguagePair(
