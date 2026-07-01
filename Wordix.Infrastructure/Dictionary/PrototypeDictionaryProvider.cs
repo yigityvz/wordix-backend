@@ -71,6 +71,92 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
             }
         };
 
+
+    /// <summary>
+    /// Prototype provider için desteklenen phrase / kalıp ifadeler.
+    /// 
+    /// Bu veriler gerçek provider değildir.
+    /// Ama lookup + database + dictionary + quiz akışını gerçek backend üzerinden test edebilmemiz için
+    /// küçük bir geliştirme verisi sağlar.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<DictionaryProviderMeaning>> PrototypePhrases
+        = new Dictionary<string, IReadOnlyCollection<DictionaryProviderMeaning>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["give up"] = new[]
+            {
+            new DictionaryProviderMeaning
+            {
+                Translation = "vazgeçmek",
+                Definition = "To stop trying to do something.",
+                ExampleSentence = "Do not give up on your goals.",
+                PartOfSpeech = "phrasal verb"
+            }
+            },
+            ["look after"] = new[]
+            {
+            new DictionaryProviderMeaning
+            {
+                Translation = "ilgilenmek",
+                Definition = "To take care of someone or something.",
+                ExampleSentence = "I look after my little brother.",
+                PartOfSpeech = "phrasal verb"
+            }
+            },
+            ["by the way"] = new[]
+            {
+            new DictionaryProviderMeaning
+            {
+                Translation = "bu arada",
+                Definition = "Used to introduce a new or additional point.",
+                ExampleSentence = "By the way, I finished the task.",
+                PartOfSpeech = "expression"
+            }
+            },
+            ["take care of"] = new[]
+            {
+            new DictionaryProviderMeaning
+            {
+                Translation = "ilgilenmek",
+                Definition = "To care for or be responsible for someone or something.",
+                ExampleSentence = "I will take care of this problem.",
+                PartOfSpeech = "expression"
+            }
+            },
+
+            ["find out"] = new[]
+        {
+            new DictionaryProviderMeaning
+            {
+                Translation = "öğrenip bulmak",
+                Definition = "To discover information.",
+                ExampleSentence = "I want to find out the truth.",
+                PartOfSpeech = "phrasal verb"
+            }
+        },
+                    ["come across"] = new[]
+        {
+            new DictionaryProviderMeaning
+            {
+                Translation = "rastlamak",
+                Definition = "To find or meet something by chance.",
+                ExampleSentence = "I came across an old photo.",
+                PartOfSpeech = "phrasal verb"
+            }
+        },
+                    ["set up"] = new[]
+        {
+            new DictionaryProviderMeaning
+            {
+                Translation = "kurmak",
+                Definition = "To prepare or arrange something for use.",
+                ExampleSentence = "We need to set up the system.",
+                PartOfSpeech = "phrasal verb"
+            }
+        }
+
+        };
+
+
     /// <summary>
     /// Normalize edilmiş kelime için prototype provider içinde anlam arar.
     /// </summary>
@@ -91,23 +177,36 @@ public sealed class PrototypeDictionaryProvider : IDictionaryProvider
                 providerName: ProviderName));
         }
 
-        // Prototype sözlüğümüzde kelime var mı kontrol ediyoruz.
-        if (!PrototypeWords.TryGetValue(normalizedText, out var meanings))
+        // Prototype sözlüğümüzde önce kelime var mı kontrol ediyoruz.
+        if (PrototypeWords.TryGetValue(normalizedText, out var wordMeanings))
         {
-            return Task.FromResult(DictionaryProviderResult.NotFound(
+            return Task.FromResult(DictionaryProviderResult.FoundResult(
                 normalizedText: normalizedText,
                 sourceLanguageCode: sourceLanguageCode,
                 targetLanguageCode: targetLanguageCode,
-                providerName: ProviderName));
+                providerName: ProviderName,
+                meanings: wordMeanings));
         }
 
-        // Kelime bulunduysa provider result dönüyoruz.
-        return Task.FromResult(DictionaryProviderResult.FoundResult(
+        // Kelime bulunamazsa phrase/veri havuzunda arıyoruz.
+        // Provider burada entity tipi döndürmez.
+        // Word mü Phrase mi kararını LookupClassifier + handler verir.
+        if (PrototypePhrases.TryGetValue(normalizedText, out var phraseMeanings))
+        {
+            return Task.FromResult(DictionaryProviderResult.FoundResult(
+                normalizedText: normalizedText,
+                sourceLanguageCode: sourceLanguageCode,
+                targetLanguageCode: targetLanguageCode,
+                providerName: ProviderName,
+                meanings: phraseMeanings));
+        }
+
+        return Task.FromResult(DictionaryProviderResult.NotFound(
             normalizedText: normalizedText,
             sourceLanguageCode: sourceLanguageCode,
             targetLanguageCode: targetLanguageCode,
-            providerName: ProviderName,
-            meanings: meanings));
+            providerName: ProviderName));
+
     }
 
     /// <summary>

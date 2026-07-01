@@ -5,6 +5,7 @@ using Wordix.Application.Features.Lookups.Mappers;
 using Wordix.Application.Features.Lookups.Dtos.Requests;
 using Wordix.Application.Features.Lookups.Dtos.Responses;
 using Wordix.Shared.Responses;
+using Wordix.Application.Features.Lookups.Commands.CreateLookup;
 
 namespace Wordix.Api.Controllers;
 

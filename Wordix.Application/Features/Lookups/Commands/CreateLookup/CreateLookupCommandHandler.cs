@@ -22,7 +22,8 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 /// - Current user bilgisinden KeycloakUserId değerini alır.
 /// - Text'i normalize eder.
 /// - Input tipini belirler.
-/// - İlk prototipte sadece Word lookup destekler.
+/// - Faz 18 itibarıyla Word ve Phrase lookup destekler.
+/// - Sentence lookup şimdilik Faz 19'a bırakılmıştır.
 /// - Önce local database'de kelime arar.
 /// - Bulamazsa dictionary provider çağırır.
 /// - Provider sonucu varsa LearningItem + Word + Meaning oluşturur.
@@ -54,6 +55,7 @@ public sealed class CreateLookupCommandHandler
     private readonly ILanguageResolver _languageResolver;
     private readonly IRepository<LearningItem> _learningItemGenericRepository;
     private readonly IRepository<Word> _wordRepository;
+    private readonly IRepository<Phrase> _phraseRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<LookupHistory> _lookupHistoryRepository;
     private readonly IUnitOfWork _unitOfWork;
@@ -79,6 +81,7 @@ public sealed class CreateLookupCommandHandler
         ILanguageResolver languageResolver,
         IRepository<LearningItem> learningItemGenericRepository,
         IRepository<Word> wordRepository,
+        IRepository<Phrase> phraseRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<LookupHistory> lookupHistoryRepository,
         IUnitOfWork unitOfWork)
@@ -92,6 +95,7 @@ public sealed class CreateLookupCommandHandler
         _languageResolver = languageResolver;
         _learningItemGenericRepository = learningItemGenericRepository;
         _wordRepository = wordRepository;
+        _phraseRepository = phraseRepository;
         _meaningRepository = meaningRepository;
         _lookupHistoryRepository = lookupHistoryRepository;
         _unitOfWork = unitOfWork;
@@ -132,9 +136,9 @@ public sealed class CreateLookupCommandHandler
         // 4. Input Word/Phrase/Sentence mı belirliyoruz.
         var inputType = _lookupClassifier.Classify(normalizedText);
 
-        // 5. İlk prototipte sadece Word destekliyoruz.
-        // Phrase ve Sentence mimari olarak düşünülüyor ama gerçek destek Faz 18/19'a bırakıldı.
-        if (inputType is not LookupInputType.Word)
+        // 5. Faz 18 itibarıyla Word ve Phrase lookup desteklenir.
+        // Sentence ise ayrı Faz 19 kapsamında ele alınacaktır.
+        if (inputType is LookupInputType.Sentence)
         {
             await SaveUnsupportedLookupHistoryAsync(
                 keycloakUserId: keycloakUserId,
@@ -146,28 +150,53 @@ public sealed class CreateLookupCommandHandler
                 cancellationToken: cancellationToken);
 
             throw new BusinessRuleException(
-                "Only single-word lookup is supported in the first prototype.",
+                "Sentence lookup is not supported yet. It will be handled in a later phase.",
                 "LOOKUP_INPUT_TYPE_NOT_SUPPORTED");
         }
 
         // 6. Önce local database'de arıyoruz.
-        // Faz 9'da yazdığımız özel repository methodunu kullanıyoruz.
-        var databaseLookupData = await _learningItemRepository.GetWordLookupDataAsync(
-            normalizedText,
-            sourceLanguage.Id,
-            targetLanguage.Id,
-            cancellationToken);
-
-        if (databaseLookupData is not null)
+        // Word ve Phrase için ayrı repository methodları kullanıyoruz.
+        // Böylece çalışan Word akışını bozmadan Phrase desteğini ekliyoruz.
+        if (inputType is LookupInputType.Word)
         {
-            return await HandleDatabaseLookupResultAsync(
-                keycloakUserId: keycloakUserId,
-                request: request,
-                normalizedText: normalizedText,
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                databaseLookupData: databaseLookupData,
-                cancellationToken: cancellationToken);
+            var databaseLookupData = await _learningItemRepository.GetWordLookupDataAsync(
+                normalizedText,
+                sourceLanguage.Id,
+                targetLanguage.Id,
+                cancellationToken);
+
+            if (databaseLookupData is not null)
+            {
+                return await HandleWordDatabaseLookupResultAsync(
+                    keycloakUserId: keycloakUserId,
+                    request: request,
+                    normalizedText: normalizedText,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    databaseLookupData: databaseLookupData,
+                    cancellationToken: cancellationToken);
+            }
+        }
+
+        if (inputType is LookupInputType.Phrase)
+        {
+            var databaseLookupData = await _learningItemRepository.GetPhraseLookupDataAsync(
+                normalizedText,
+                sourceLanguage.Id,
+                targetLanguage.Id,
+                cancellationToken);
+
+            if (databaseLookupData is not null)
+            {
+                return await HandlePhraseDatabaseLookupResultAsync(
+                    keycloakUserId: keycloakUserId,
+                    request: request,
+                    normalizedText: normalizedText,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    databaseLookupData: databaseLookupData,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         // 7. Database'de yoksa provider çağırıyoruz.
@@ -184,6 +213,7 @@ public sealed class CreateLookupCommandHandler
                 keycloakUserId: keycloakUserId,
                 request: request,
                 normalizedText: normalizedText,
+                inputType: inputType,
                 sourceLanguageId: sourceLanguage.Id,
                 targetLanguageId: targetLanguage.Id,
                 providerName: providerResult.ProviderName,
@@ -192,21 +222,36 @@ public sealed class CreateLookupCommandHandler
             throw new NotFoundException("Lookup result", normalizedText);
         }
 
-        // 8. Provider sonucu varsa global içerik havuzuna LearningItem + Word + Meaning oluşturuyoruz.
-        return await HandleProviderLookupResultAsync(
-            keycloakUserId: keycloakUserId,
-            request: request,
-            normalizedText: normalizedText,
-            sourceLanguage: sourceLanguage,
-            targetLanguage: targetLanguage,
-            providerResult: providerResult,
-            cancellationToken: cancellationToken);
+        return inputType switch
+        {
+            LookupInputType.Word => await HandleWordProviderLookupResultAsync(
+                keycloakUserId: keycloakUserId,
+                request: request,
+                normalizedText: normalizedText,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                providerResult: providerResult,
+                cancellationToken: cancellationToken),
+
+            LookupInputType.Phrase => await HandlePhraseProviderLookupResultAsync(
+                keycloakUserId: keycloakUserId,
+                request: request,
+                normalizedText: normalizedText,
+                sourceLanguage: sourceLanguage,
+                targetLanguage: targetLanguage,
+                providerResult: providerResult,
+                cancellationToken: cancellationToken),
+
+            _ => throw new BusinessRuleException(
+                "Lookup input type is not supported.",
+                "LOOKUP_INPUT_TYPE_NOT_SUPPORTED")
+        };
     }
 
     /// <summary>
     /// Database'de bulunan kelime için LookupHistory oluşturur ve LookupResponse döner.
     /// </summary>
-    private async Task<LookupResponse> HandleDatabaseLookupResultAsync(
+    private async Task<LookupResponse> HandleWordDatabaseLookupResultAsync(
         string keycloakUserId,
         CreateLookupCommand request,
         string normalizedText,
@@ -251,10 +296,60 @@ public sealed class CreateLookupCommandHandler
             isAlreadyInUserDictionary: isAlreadyInUserDictionary);
     }
 
+
     /// <summary>
-    /// Provider'dan bulunan kelime için LearningItem + Word + Meaning + LookupHistory oluşturur.
+    /// Database'de bulunan phrase için LookupHistory oluşturur ve LookupResponse döner.
     /// </summary>
-    private async Task<LookupResponse> HandleProviderLookupResultAsync(
+    private async Task<LookupResponse> HandlePhraseDatabaseLookupResultAsync(
+        string keycloakUserId,
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        PhraseLookupData databaseLookupData,
+        CancellationToken cancellationToken)
+    {
+        var resultCount = databaseLookupData.Meanings.Count;
+
+        var lookupHistory = CreateLookupHistory(
+            keycloakUserId: keycloakUserId,
+            queryText: request.Text,
+            normalizedQueryText: normalizedText,
+            inputType: LookupInputType.Phrase,
+            sourceLanguageId: sourceLanguage.Id,
+            targetLanguageId: targetLanguage.Id,
+            learningItemId: databaseLookupData.LearningItem.Id,
+            wasFoundInDatabase: true,
+            wasCreatedFromProvider: false,
+            providerName: null,
+            resultCount: resultCount);
+
+        await _lookupHistoryRepository.AddAsync(lookupHistory, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Kullanıcının dictionary'sinde bu phrase zaten var mı diye kontrol ediyoruz.
+        // Kontrol yine LearningItemId üzerinden yapılır.
+        var isAlreadyInUserDictionary = await _userLearningItemRepository
+            .ExistsByUserAndLearningItemAsync(
+                keycloakUserId,
+                databaseLookupData.LearningItem.Id,
+                cancellationToken);
+
+        return LookupMapper.ToDatabaseLookupResponse(
+            request: request,
+            normalizedText: normalizedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            databaseLookupData: databaseLookupData,
+            lookupHistory: lookupHistory,
+            isAlreadyInUserDictionary: isAlreadyInUserDictionary);
+    }
+
+
+    /// <summary>
+    /// Provider'dan bulunan word için LearningItem + Word + Meaning + LookupHistory oluşturur.
+    /// </summary>
+    private async Task<LookupResponse> HandleWordProviderLookupResultAsync(
         string keycloakUserId,
         CreateLookupCommand request,
         string normalizedText,
@@ -337,8 +432,95 @@ public sealed class CreateLookupCommandHandler
             isAlreadyInUserDictionary: isAlreadyInUserDictionary);
     }
 
+
     /// <summary>
-    /// Phrase/Sentence gibi ilk prototipte desteklenmeyen inputlar için lookup history kaydı oluşturur.
+    /// Provider'dan bulunan phrase için LearningItem + Phrase + Meaning + LookupHistory oluşturur.
+    /// </summary>
+    private async Task<LookupResponse> HandlePhraseProviderLookupResultAsync(
+        string keycloakUserId,
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        DictionaryProviderResult providerResult,
+        CancellationToken cancellationToken)
+    {
+        // İlk phrase provider akışında CEFR/Difficulty otomatik tespit etmiyoruz.
+        // Faz 24 import/provider sisteminde bu konu detaylandırılacak.
+        var learningItem = new LearningItem(
+            LearningItemType.Phrase,
+            sourceLanguage.Id,
+            CefrLevel.A1,
+            DifficultyGroup.Beginner,
+            LearningItemSourceType.Provider);
+
+        var phrase = new Phrase(
+            learningItem.Id,
+            normalizedText,
+            normalizedText,
+            PhraseType.Unknown);
+
+        var meanings = providerResult.Meanings
+            .Select((providerMeaning, index) => new Meaning(
+                learningItem.Id,
+                targetLanguage.Id,
+                providerMeaning.Translation,
+                providerMeaning.Definition,
+                providerMeaning.PartOfSpeech,
+                category: null,
+                isPrimary: index == 0,
+                displayOrder: index + 1))
+            .ToArray();
+
+        var lookupHistory = CreateLookupHistory(
+            keycloakUserId: keycloakUserId,
+            queryText: request.Text,
+            normalizedQueryText: normalizedText,
+            inputType: LookupInputType.Phrase,
+            sourceLanguageId: sourceLanguage.Id,
+            targetLanguageId: targetLanguage.Id,
+            learningItemId: learningItem.Id,
+            wasFoundInDatabase: false,
+            wasCreatedFromProvider: true,
+            providerName: providerResult.ProviderName,
+            resultCount: meanings.Length);
+
+        await _learningItemGenericRepository.AddAsync(learningItem, cancellationToken);
+        await _phraseRepository.AddAsync(phrase, cancellationToken);
+
+        foreach (var meaning in meanings)
+        {
+            await _meaningRepository.AddAsync(meaning, cancellationToken);
+        }
+
+        await _lookupHistoryRepository.AddAsync(lookupHistory, cancellationToken);
+
+        // LearningItem + Phrase + Meaning + LookupHistory tek SaveChanges ile kaydedilir.
+        // EF Core SaveChanges kendi içinde transaction açar.
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        // Yeni oluşturulan bir provider sonucu kullanıcının dictionary'sine otomatik kaydedilmez.
+        // Bu yüzden false.
+        const bool isAlreadyInUserDictionary = false;
+
+        return LookupMapper.ToProviderLookupResponse(
+            request: request,
+            normalizedText: normalizedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            providerResult: providerResult,
+            learningItem: learningItem,
+            phrase: phrase,
+            meanings: meanings,
+            lookupHistory: lookupHistory,
+            isAlreadyInUserDictionary: isAlreadyInUserDictionary);
+    }
+
+    /// <summary>
+    /// Şu an desteklenmeyen input tipleri için lookup history kaydı oluşturur.
+    /// 
+    /// Faz 18 itibarıyla Word ve Phrase desteklenir.
+    /// Sentence ise Faz 19'a bırakıldığı için bu method şu anda özellikle Sentence için kullanılır.
     /// </summary>
     private async Task SaveUnsupportedLookupHistoryAsync(
         string keycloakUserId,
@@ -367,12 +549,13 @@ public sealed class CreateLookupCommandHandler
     }
 
     /// <summary>
-    /// Database ve provider sonucunda bulunamayan kelimeler için lookup history oluşturur.
+    /// Database ve provider sonucunda bulunamayan word/phrase lookup istekleri için lookup history oluşturur.
     /// </summary>
     private async Task SaveNotFoundLookupHistoryAsync(
         string keycloakUserId,
         CreateLookupCommand request,
         string normalizedText,
+        LookupInputType inputType,
         Guid sourceLanguageId,
         Guid targetLanguageId,
         string providerName,
@@ -382,7 +565,7 @@ public sealed class CreateLookupCommandHandler
             keycloakUserId: keycloakUserId,
             queryText: request.Text,
             normalizedQueryText: normalizedText,
-            inputType: LookupInputType.Word,
+            inputType: inputType,
             sourceLanguageId: sourceLanguageId,
             targetLanguageId: targetLanguageId,
             learningItemId: null,

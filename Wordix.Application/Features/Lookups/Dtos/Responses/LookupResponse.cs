@@ -17,17 +17,30 @@ public sealed class LookupResponse
     /// Lookup sonucunda bulunan veya oluşturulan LearningItem id değeridir.
     /// 
     /// Wordix'te Word/Phrase/Sentence gibi öğrenilebilir her içerik LearningItem çatısı altında tutulur.
-    /// İlk prototipte sadece Word destekliyoruz ama LearningItem yapısını koruyoruz.
+    /// Wordix'te Word/Phrase/Sentence gibi öğrenilebilir her içerik LearningItem çatısı altında tutulur.
+    /// Faz 18 itibarıyla Word ve Phrase aktif olarak desteklenir..
     /// </summary>
     public Guid LearningItemId { get; init; }
 
     /// <summary>
     /// Eğer lookup sonucu bir Word ise Word entity'sinin id değeridir.
-    /// 
-    /// İlk prototipte lookup sadece word desteklediği için çoğu zaman dolu olacak.
-    /// İleride phrase/sentence desteği geldiğinde bu alan null olabilir.
+    /// Word lookup sonucunda dolu olur.
+    /// Phrase lookup sonucunda null olur.
     /// </summary>
     public Guid? WordId { get; init; }
+
+
+    /// <summary>
+    /// Eğer lookup sonucu bir Phrase ise Phrase entity'sinin id değeridir.
+    /// 
+    /// Word lookup sonucunda null olur.
+    /// Phrase lookup sonucunda dolu olur.
+    /// 
+    /// Bu alan frontend'in içerik detay tipini ayırt etmesini kolaylaştırır.
+    /// Ana öğrenme akışı yine LearningItemId üzerinden yürür.
+    /// </summary>
+    public Guid? PhraseId { get; init; }
+
 
     /// <summary>
     /// Oluşturulan LookupHistory kaydının id değeridir.
@@ -55,13 +68,11 @@ public sealed class LookupResponse
 
     /// <summary>
     /// Lookup sonucunun içerik tipidir.
-    /// 
-    /// İlk prototipte:
+    /// Aktif desteklenen değerler:
     /// Word
-    /// 
-    /// İleride:
     /// Phrase
-    /// Sentence
+    /// 
+    /// Sentence enum/model tarafında düşünülmüştür ama Faz 19'a kadar aktif değildir.
     /// </summary>
     public string ItemType { get; init; } = string.Empty;
 

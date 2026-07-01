@@ -43,6 +43,14 @@ public sealed class QuizQuestionResponse
     /// </summary>
     public Guid? WordId { get; init; }
 
+
+    /// <summary>
+    /// Eğer soru bir Phrase üzerinden üretildiyse Phrase id değeridir.
+    /// Word sorularında null olur.
+    /// </summary>
+    public Guid? PhraseId { get; init; }
+
+
     /// <summary>
     /// Sorunun içerik tipi.
     /// 

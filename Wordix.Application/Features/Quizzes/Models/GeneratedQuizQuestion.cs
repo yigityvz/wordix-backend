@@ -1,4 +1,6 @@
-﻿namespace Wordix.Application.Features.Quizzes.Models;
+﻿using Wordix.Domain.Enums;
+
+namespace Wordix.Application.Features.Quizzes.Models;
 
 /// <summary>
 /// Generator tarafından üretilen tek bir quiz sorusunu temsil eder.
@@ -22,6 +24,21 @@ public sealed class GeneratedQuizQuestion
     /// Eğer soru Word üzerinden üretildiyse Word id değeridir.
     /// </summary>
     public Guid? WordId { get; init; }
+
+
+    /// <summary>
+    /// Eğer soru Phrase üzerinden üretildiyse Phrase id değeridir.
+    /// Word sorularında null olur.
+    /// </summary>
+    public Guid? PhraseId { get; init; }
+
+    /// <summary>
+    /// Sorunun üretildiği içerik tipidir.
+    /// 
+    /// Response mapping sırasında hardcoded Word kullanmamak için tutulur.
+    /// </summary>
+    public LearningItemType ItemType { get; init; }
+
 
     /// <summary>
     /// Soru metnidir.

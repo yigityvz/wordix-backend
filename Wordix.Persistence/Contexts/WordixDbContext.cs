@@ -58,6 +58,14 @@ public class WordixDbContext : DbContext
     public DbSet<Word> Words => Set<Word>();
 
     /// <summary>
+    /// Global phrase / kalıp ifade tablosudur.
+    /// 
+    /// Phrase de Word gibi kullanıcıya özel değildir.
+    /// Kullanıcı phrase'i kendi dictionary'sine kaydettiğinde UserLearningItem oluşur.
+    /// </summary>
+    public DbSet<Phrase> Phrases => Set<Phrase>();
+
+    /// <summary>
     /// Word veya ileride Phrase anlamlarını tutar.
     /// </summary>
     public DbSet<Meaning> Meanings => Set<Meaning>();

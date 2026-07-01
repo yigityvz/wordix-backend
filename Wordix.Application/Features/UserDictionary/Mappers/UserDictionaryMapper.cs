@@ -2,6 +2,7 @@
 using Wordix.Application.Features.UserDictionary.Dtos.Requests;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
+using Wordix.Domain.Enums;
 
 namespace Wordix.Application.Features.UserDictionary.Mappers;
 
@@ -108,6 +109,7 @@ public static class UserDictionaryMapper
         UserLearningItem userLearningItem,
         IReadOnlyDictionary<Guid, LearningItem> learningItemLookup,
         IReadOnlyDictionary<Guid, Word> wordLookup,
+        IReadOnlyDictionary<Guid, Phrase> phraseLookup,
         IReadOnlyDictionary<Guid, Meaning[]> meaningsByLearningItemId,
         IReadOnlyDictionary<Guid, UserLearningProgress> progressLookup,
         IReadOnlyDictionary<Guid, Language> languageLookup)
@@ -115,6 +117,7 @@ public static class UserDictionaryMapper
         ArgumentNullException.ThrowIfNull(userLearningItem);
         ArgumentNullException.ThrowIfNull(learningItemLookup);
         ArgumentNullException.ThrowIfNull(wordLookup);
+        ArgumentNullException.ThrowIfNull(phraseLookup);
         ArgumentNullException.ThrowIfNull(meaningsByLearningItemId);
         ArgumentNullException.ThrowIfNull(progressLookup);
         ArgumentNullException.ThrowIfNull(languageLookup);
@@ -127,6 +130,7 @@ public static class UserDictionaryMapper
         }
 
         wordLookup.TryGetValue(learningItem.Id, out var word);
+        phraseLookup.TryGetValue(learningItem.Id, out var phrase);
         languageLookup.TryGetValue(learningItem.LanguageId, out var sourceLanguage);
         meaningsByLearningItemId.TryGetValue(learningItem.Id, out var meanings);
         progressLookup.TryGetValue(userLearningItem.Id, out var progress);
@@ -135,6 +139,7 @@ public static class UserDictionaryMapper
             userLearningItem: userLearningItem,
             learningItem: learningItem,
             word: word,
+            phrase: phrase,
             sourceLanguage: sourceLanguage,
             meanings: meanings ?? Array.Empty<Meaning>(),
             progress: progress);
@@ -150,6 +155,7 @@ public static class UserDictionaryMapper
         UserLearningItem userLearningItem,
         LearningItem learningItem,
         Word? word,
+        Phrase? phrase,
         Language? sourceLanguage,
         IReadOnlyCollection<Meaning> meanings,
         UserLearningProgress? progress)
@@ -167,9 +173,10 @@ public static class UserDictionaryMapper
             UserLearningItemId = userLearningItem.Id,
             LearningItemId = learningItem.Id,
             WordId = word?.Id,
+            PhraseId = phrase?.Id,
             ItemType = learningItem.ItemType.ToString(),
-            DisplayText = ResolveDisplayText(word),
-            NormalizedText = ResolveNormalizedText(word),
+            DisplayText = ResolveDisplayText(learningItem, word, phrase),
+            NormalizedText = ResolveNormalizedText(learningItem, word, phrase),
             SourceLanguageCode = sourceLanguage?.Code ?? string.Empty,
             SelectedMeaningId = selectedMeaning?.Id,
             SelectedMeaning = selectedMeaning is null
@@ -247,21 +254,43 @@ public static class UserDictionaryMapper
     }
 
     /// <summary>
-    /// Word bilgisinden kullanıcıya gösterilecek ana metni çözer.
+    /// LearningItem tipine göre kullanıcıya gösterilecek ana metni çözer.
     /// 
-    /// İlk prototipte sadece Word aktif.
-    /// Phrase/Sentence desteği geldiğinde burası yeni içerik tiplerine göre genişletilebilir.
+    /// Word için Word.Text,
+    /// Phrase için Phrase.Text kullanılır.
+    /// 
+    /// Bu mapping kuralını handler içinde tutmuyoruz.
+    /// Çünkü handler veri toplar; response gösterim kuralı mapper'ın sorumluluğudur.
     /// </summary>
-    private static string ResolveDisplayText(Word? word)
+    private static string ResolveDisplayText(
+        LearningItem learningItem,
+        Word? word,
+        Phrase? phrase)
     {
-        return word?.Text ?? string.Empty;
+        return learningItem.ItemType switch
+        {
+            LearningItemType.Word => word?.Text ?? string.Empty,
+            LearningItemType.Phrase => phrase?.Text ?? string.Empty,
+            _ => string.Empty
+        };
     }
 
     /// <summary>
-    /// Word bilgisinden normalize edilmiş metni çözer.
+    /// LearningItem tipine göre normalize edilmiş metni çözer.
+    /// 
+    /// Word için Word.NormalizedText,
+    /// Phrase için Phrase.NormalizedText kullanılır.
     /// </summary>
-    private static string ResolveNormalizedText(Word? word)
+    private static string ResolveNormalizedText(
+        LearningItem learningItem,
+        Word? word,
+        Phrase? phrase)
     {
-        return word?.NormalizedText ?? string.Empty;
+        return learningItem.ItemType switch
+        {
+            LearningItemType.Word => word?.NormalizedText ?? string.Empty,
+            LearningItemType.Phrase => phrase?.NormalizedText ?? string.Empty,
+            _ => string.Empty
+        };
     }
 }

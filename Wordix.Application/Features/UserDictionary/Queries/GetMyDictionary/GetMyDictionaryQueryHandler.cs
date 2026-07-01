@@ -35,6 +35,7 @@ public sealed class GetMyDictionaryQueryHandler
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
+    private readonly IRepository<Phrase> _phraseRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
@@ -54,6 +55,7 @@ public sealed class GetMyDictionaryQueryHandler
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
+        IRepository<Phrase> phraseRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
@@ -62,6 +64,7 @@ public sealed class GetMyDictionaryQueryHandler
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
+        _phraseRepository = phraseRepository;
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
@@ -111,13 +114,21 @@ public sealed class GetMyDictionaryQueryHandler
 
         var learningItemLookup = learningItems.ToDictionary(item => item.Id);
 
-        // 5. İlk prototipte aktif olarak Word destekliyoruz.
-        // Bu yüzden Word detaylarını LearningItemId üzerinden toplu çekiyoruz.
+        // 5. Word detaylarını LearningItemId üzerinden toplu çekiyoruz.
+        // Dictionary sistemi LearningItem merkezli olduğu için Word detayını ayrıca topluyoruz.
         var words = await _wordRepository.ListAsync(
             word => learningItemIds.Contains(word.LearningItemId),
             cancellationToken);
 
         var wordLookup = words.ToDictionary(word => word.LearningItemId);
+
+        // Phrase detaylarını LearningItemId üzerinden toplu çekiyoruz.
+        // Faz 18 itibarıyla dictionary listesi sadece Word değil Phrase itemları da gösterebilir.
+        var phrases = await _phraseRepository.ListAsync(
+            phrase => learningItemIds.Contains(phrase.LearningItemId),
+            cancellationToken);
+
+        var phraseLookup = phrases.ToDictionary(phrase => phrase.LearningItemId);
 
         // 6. Meaning kayıtlarını toplu alıyoruz.
         // SelectedMeaning veya primary meaning mapping için kullanılacak.
@@ -159,6 +170,7 @@ public sealed class GetMyDictionaryQueryHandler
                 userLearningItem: item,
                 learningItemLookup: learningItemLookup,
                 wordLookup: wordLookup,
+                phraseLookup: phraseLookup,
                 meaningsByLearningItemId: meaningsByLearningItemId,
                 progressLookup: progressLookup,
                 languageLookup: languageLookup))

@@ -1,4 +1,6 @@
-﻿using Wordix.Application.Features.Quizzes.Models;
+﻿using Wordix.Domain.Enums;
+
+using Wordix.Application.Features.Quizzes.Models;
 
 namespace Wordix.Application.Features.Quizzes.Services;
 
@@ -88,7 +90,9 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
                 UserLearningItemId = questionCandidate.UserLearningItemId,
                 LearningItemId = questionCandidate.LearningItemId,
                 WordId = questionCandidate.WordId,
-                QuestionText = questionCandidate.QuestionText,
+                PhraseId = questionCandidate.PhraseId,
+                ItemType = questionCandidate.ItemType,
+                QuestionText = BuildQuestionText(questionCandidate),
                 QuestionOrder = generatedQuestions.Count + 1,
                 QuestionType = QuestionType,
                 CorrectMeaningId = questionCandidate.CorrectMeaningId,
@@ -216,4 +220,29 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
     {
         return value.Trim().ToLowerInvariant();
     }
+
+    /// <summary>
+    /// Adayın içerik tipine göre kullanıcıya gösterilecek soru metnini üretir.
+    /// 
+    /// Word için:
+    /// What does "achieve" mean?
+    /// 
+    /// Phrase için:
+    /// What does the phrase "give up" mean?
+    /// 
+    /// Bu kural generator içindedir çünkü soru üretim formatı generator sorumluluğudur.
+    /// </summary>
+    private static string BuildQuestionText(
+        QuizQuestionCandidate candidate)
+    {
+        var contentText = candidate.QuestionText.Trim();
+
+        return candidate.ItemType switch
+        {
+            LearningItemType.Phrase => $"What does the phrase \"{contentText}\" mean?",
+            LearningItemType.Word => $"What does \"{contentText}\" mean?",
+            _ => $"What does \"{contentText}\" mean?"
+        };
+    }
+
 }

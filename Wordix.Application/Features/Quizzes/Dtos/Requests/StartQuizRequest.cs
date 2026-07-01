@@ -9,7 +9,8 @@
 /// İlk prototipte desteklenen değerler:
 /// - QuizType: Test
 /// - QuizSourceType: Dictionary
-/// - QuizContentMode: WordsOnly
+/// - QuizContentMode: WordsOnly, PhrasesOnly, Mixed
+/// - SentencesOnly Faz 19'a kadar desteklenmez.
 /// 
 /// Örnek JSON:
 /// {

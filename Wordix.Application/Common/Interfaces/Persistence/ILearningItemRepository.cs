@@ -7,9 +7,9 @@ namespace Wordix.Application.Common.Interfaces.Persistence;
 /// 
 /// Generic repository temel CRUD işlemleri için yeterlidir.
 /// Ancak Wordix'te lookup gibi özel sorgular vardır:
-/// - normalized word text ile arama,
-/// - LearningItem + Word + Meaning verisini birlikte getirme,
-/// - aynı kelime var mı kontrol etme.
+/// - normalized word/phrase text ile arama,
+/// - LearningItem + Word/Phrase + Meaning verisini birlikte getirme,
+/// - aynı içerik var mı kontrol etme.
 /// 
 /// Bu tarz domain'e özel sorguları generic repository içine koymak yerine
 /// özel repository ile ayırıyoruz.
@@ -39,12 +39,45 @@ public interface ILearningItemRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Normalize edilmiş phrase metnine göre Phrase lookup verisini getirir.
+    /// 
+    /// Örnek:
+    /// normalizedText = "give up"
+    /// sourceLanguageId = English language Id
+    /// targetLanguageId = Turkish language Id
+    /// 
+    /// Dönen veri:
+    /// - LearningItem
+    /// - Phrase
+    /// - Türkçe Meaning listesi
+    /// 
+    /// Kayıt bulunamazsa null döner.
+    /// Böylece lookup handler database'de yoksa provider akışına geçebilir.
+    /// </summary>
+    Task<PhraseLookupData?> GetPhraseLookupDataAsync(
+        string normalizedText,
+        Guid sourceLanguageId,
+        Guid targetLanguageId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Belirli bir dilde normalize edilmiş kelime var mı kontrol eder.
     /// 
     /// Bu method duplicate kelime oluşmasını engellemek için kullanılabilir.
     /// Örneğin English içinde "achieve" zaten varsa tekrar oluşturmayız.
     /// </summary>
     Task<bool> WordExistsAsync(
+        string normalizedText,
+        Guid sourceLanguageId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Belirli bir dilde normalize edilmiş phrase var mı kontrol eder.
+    /// 
+    /// Bu method duplicate phrase oluşmasını engellemek için kullanılabilir.
+    /// Örneğin English içinde "give up" zaten varsa tekrar oluşturmayız.
+    /// </summary>
+    Task<bool> PhraseExistsAsync(
         string normalizedText,
         Guid sourceLanguageId,
         CancellationToken cancellationToken = default);

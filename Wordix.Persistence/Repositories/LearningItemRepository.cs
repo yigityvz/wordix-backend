@@ -93,6 +93,76 @@ public class LearningItemRepository : ILearningItemRepository
             meanings);
     }
 
+
+    /// <summary>
+    /// Normalize edilmiş phrase metnine göre LearningItem + Phrase + Meaning verisini getirir.
+    /// 
+    /// Neden burada join kullanıyoruz?
+    /// 
+    /// Çünkü Phrase entity'si dil bilgisini doğrudan taşımaz.
+    /// Dil bilgisi LearningItem üzerinde tutulur.
+    /// Bu yüzden "English dilindeki give up phrase'i" için Phrase ile LearningItem birlikte sorgulanır.
+    /// 
+    /// Meaning listesi ayrıca hedef dile göre çekilir.
+    /// Örneğin sourceLanguageId = English, targetLanguageId = Turkish.
+    /// </summary>
+    public async Task<PhraseLookupData?> GetPhraseLookupDataAsync(
+        string normalizedText,
+        Guid sourceLanguageId,
+        Guid targetLanguageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedText))
+        {
+            return null;
+        }
+
+        if (sourceLanguageId == Guid.Empty || targetLanguageId == Guid.Empty)
+        {
+            return null;
+        }
+
+        var normalized = normalizedText.Trim().ToLowerInvariant();
+
+        // Phrase + LearningItem birlikte sorgulanır.
+        // AsNoTracking kullanıyoruz çünkü bu method sadece okuma amaçlıdır.
+        var phraseData = await (
+            from phrase in _dbContext.Phrases.AsNoTracking()
+            join learningItem in _dbContext.LearningItems.AsNoTracking()
+                on phrase.LearningItemId equals learningItem.Id
+            where phrase.NormalizedText == normalized
+                  && learningItem.LanguageId == sourceLanguageId
+                  && learningItem.ItemType == LearningItemType.Phrase
+                  && learningItem.IsActive
+            select new
+            {
+                LearningItem = learningItem,
+                Phrase = phrase
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (phraseData is null)
+        {
+            return null;
+        }
+
+        // Phrase'in hedef dildeki anlamlarını getiriyoruz.
+        // Önce primary anlam gelsin, sonra DisplayOrder'a göre sıralansın.
+        var meanings = await _dbContext.Meanings
+            .AsNoTracking()
+            .Where(meaning =>
+                meaning.LearningItemId == phraseData.LearningItem.Id &&
+                meaning.TargetLanguageId == targetLanguageId)
+            .OrderByDescending(meaning => meaning.IsPrimary)
+            .ThenBy(meaning => meaning.DisplayOrder)
+            .ToListAsync(cancellationToken);
+
+        return new PhraseLookupData(
+            phraseData.LearningItem,
+            phraseData.Phrase,
+            meanings);
+    }
+
     /// <summary>
     /// Belirli bir kaynak dilde normalize edilmiş kelime var mı kontrol eder.
     /// 
@@ -126,4 +196,39 @@ public class LearningItemRepository : ILearningItemRepository
             select word.Id)
             .AnyAsync(cancellationToken);
     }
+
+    /// <summary>
+    /// Belirli bir kaynak dilde normalize edilmiş phrase var mı kontrol eder.
+    /// 
+    /// Bu method provider/import akışında duplicate oluşmasını engellemek için kullanılabilir.
+    /// Örneğin English içinde "give up" zaten varsa tekrar Phrase oluşturmayız.
+    /// </summary>
+    public async Task<bool> PhraseExistsAsync(
+        string normalizedText,
+        Guid sourceLanguageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(normalizedText))
+        {
+            return false;
+        }
+
+        if (sourceLanguageId == Guid.Empty)
+        {
+            return false;
+        }
+
+        var normalized = normalizedText.Trim().ToLowerInvariant();
+
+        return await (
+            from phrase in _dbContext.Phrases.AsNoTracking()
+            join learningItem in _dbContext.LearningItems.AsNoTracking()
+                on phrase.LearningItemId equals learningItem.Id
+            where phrase.NormalizedText == normalized
+                  && learningItem.LanguageId == sourceLanguageId
+                  && learningItem.ItemType == LearningItemType.Phrase
+            select phrase.Id)
+            .AnyAsync(cancellationToken);
+    }
+
 }

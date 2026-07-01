@@ -3,7 +3,10 @@
 /// <summary>
 /// Lookup'a gelen input metninin hangi tür öğrenilebilir içerik olduğunu temsil eder.
 /// 
-/// İlk prototipte sadece Word desteklenecek.
+/// Lookup input sınıflandırmasını temsil eder.
+/// 
+/// Faz 18 itibarıyla Word ve Phrase lookup aktif olarak desteklenir.
+/// Sentence sınıflandırılabilir ama gerçek lookup desteği Faz 19'a bırakılmıştır.
 /// Fakat mimari Phrase ve Sentence için hazır tutuluyor.
 /// </summary>
 public enum LookupInputType

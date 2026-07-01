@@ -26,14 +26,23 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// <summary>
     /// Quiz sorularının kaynağıdır.
     /// 
-    /// İlk prototipte sadece Dictionary desteklenir.
+    /// Faz 18 itibarıyla aktif desteklenen kaynak:
+    /// UserDictionary
+    /// 
+    /// Kullanıcının kendi dictionary'sinden soru üretilir.
     /// </summary>
     public string QuizSourceType { get; init; } = string.Empty;
 
     /// <summary>
     /// Quiz içerik modudur.
     /// 
-    /// İlk prototipte sadece WordsOnly desteklenir.
+    /// Faz 18 itibarıyla desteklenen modlar:
+    /// - WordsOnly
+    /// - PhrasesOnly
+    /// - Mixed
+    /// 
+    /// SentencesOnly enumda vardır ama Sentence fazı henüz aktif olmadığı için
+    /// şimdilik desteklenmez.
     /// </summary>
     public string QuizContentMode { get; init; } = string.Empty;
 

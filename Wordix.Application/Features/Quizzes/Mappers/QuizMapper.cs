@@ -104,7 +104,8 @@ public static class QuizMapper
             QuestionText = quizQuestion.QuestionText,
             LearningItemId = quizQuestion.LearningItemId,
             WordId = generatedQuestion.WordId,
-            ItemType = LearningItemType.Word.ToString(),
+            PhraseId = generatedQuestion.PhraseId,
+            ItemType = generatedQuestion.ItemType.ToString(),
 
             // API response'ta generator'ın daha açıklayıcı question type değerini döndürüyoruz.
             // Database tarafında ise QuizQuestion.QuestionType domain enum olarak saklanır.

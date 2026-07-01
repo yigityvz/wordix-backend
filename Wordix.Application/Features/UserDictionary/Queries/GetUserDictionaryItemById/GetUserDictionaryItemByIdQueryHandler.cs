@@ -36,6 +36,7 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
+    private readonly IRepository<Phrase> _phraseRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
@@ -55,6 +56,7 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
+        IRepository<Phrase> phraseRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository)
@@ -63,6 +65,7 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
+        _phraseRepository = phraseRepository;
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
@@ -121,10 +124,16 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
                 userLearningItem.LearningItemId);
         }
 
-        // 5. İlk prototipte Word aktif olduğu için Word bilgisini LearningItemId üzerinden alıyoruz.
-        // Phrase/Sentence desteği geldiğinde burası genişletilebilir.
+        // 5. LearningItem Word ise Word detayını alıyoruz.
+        // Phrase itemlarında bu sorgu null döner; mapper item type'a göre doğru alanı kullanır.
         var word = await _wordRepository.FirstOrDefaultAsync(
             word => word.LearningItemId == learningItem.Id,
+            cancellationToken);
+
+        // LearningItem Phrase ise Phrase detayını alıyoruz.
+        // Word itemlarında bu sorgu null döner.
+        var phrase = await _phraseRepository.FirstOrDefaultAsync(
+            phrase => phrase.LearningItemId == learningItem.Id,
             cancellationToken);
 
         // 6. LearningItem'ın source language bilgisini alıyoruz.
@@ -150,6 +159,7 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             userLearningItem: userLearningItem,
             learningItem: learningItem,
             word: word,
+            phrase: phrase,
             sourceLanguage: sourceLanguage,
             meanings: meanings,
             progress: progress);

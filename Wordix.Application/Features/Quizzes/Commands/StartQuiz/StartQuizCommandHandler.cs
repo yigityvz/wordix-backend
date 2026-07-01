@@ -49,6 +49,7 @@ public sealed class StartQuizCommandHandler
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
+    private readonly IRepository<Phrase> _phraseRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<QuizSession> _quizSessionRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
@@ -71,6 +72,7 @@ public sealed class StartQuizCommandHandler
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
+        IRepository<Phrase> phraseRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
@@ -82,6 +84,7 @@ public sealed class StartQuizCommandHandler
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
+        _phraseRepository = phraseRepository;
         _meaningRepository = meaningRepository;
         _quizSessionRepository = quizSessionRepository;
         _quizQuestionRepository = quizQuestionRepository;
@@ -104,6 +107,13 @@ public sealed class StartQuizCommandHandler
         // Kullanıcıya ait dictionary ve quiz kayıtları bu KeycloakUserId ile ilişkilendirilir.
         var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
+        // Request string değerlerini domain enum değerlerine çeviriyoruz.
+        // Controller veya handler içine dağınık string karşılaştırması koymamak için
+        // parse işlemini küçük helper methodlarda topluyoruz.
+        var quizType = ParseQuizType(request.QuizType);
+        var quizSourceType = ParseQuizSourceType(request.QuizSourceType);
+        var quizContentMode = ParseQuizContentMode(request.QuizContentMode);
+
         // 2. Kullanıcının aktif dictionary itemlarını alıyoruz.
         // QuizSourceType = Dictionary olduğu için global kelimelerden değil,
         // kullanıcının kendi kaydettiği itemlardan soru üreteceğiz.
@@ -122,14 +132,14 @@ public sealed class StartQuizCommandHandler
         // 3. Dictionary itemlarından quiz üretmeye uygun candidate listesi hazırlıyoruz.
         var candidates = await BuildQuestionCandidatesAsync(
             userLearningItems,
+            quizContentMode,
             cancellationToken);
 
         // 4 seçenekli test için minimum 4 farklı aday anlam gerekir.
         if (candidates.Count < OptionCountPerQuestion)
         {
             throw new BusinessRuleException(
-                $"At least {OptionCountPerQuestion} saved word items with meanings are required to start a multiple choice quiz.",
-                "NOT_ENOUGH_DICTIONARY_ITEMS_FOR_QUIZ");
+                $"At least {OptionCountPerQuestion} saved learning items with meanings are required to start a multiple choice quiz.");
         }
 
         // Kullanıcı dictionary'sinde 5 uygun kelime varsa ve 10 soru isterse,
@@ -170,14 +180,14 @@ public sealed class StartQuizCommandHandler
         // - Sistem önerisi yok
         // - Deck yok
         var quizSession = new QuizSession(
-            keycloakUserId,
-            QuizType.Test,
-            QuizSourceType.UserDictionary,
-            QuizContentMode.WordsOnly,
-            DifficultyGroup.Beginner,
-            generationResult.GeneratedQuestionCount,
-            includeSystemRecommendations: false,
-            deckId: null);
+             keycloakUserId,
+             quizType,
+             quizSourceType,
+             quizContentMode,
+             DifficultyGroup.Beginner,
+             generationResult.GeneratedQuestionCount,
+             includeSystemRecommendations: false,
+             deckId: null);
 
         await _quizSessionRepository.AddAsync(
             quizSession,
@@ -257,11 +267,16 @@ public sealed class StartQuizCommandHandler
     /// <summary>
     /// Kullanıcının dictionary kayıtlarından quiz question candidate listesi oluşturur.
     /// 
-    /// İlk prototipte sadece Word itemlar desteklenir.
-    /// Phrase/Sentence itemlar dictionary'de olsa bile bu quiz modunda kullanılmaz.
+    /// Faz 18 itibarıyla:
+    /// - WordsOnly sadece Word itemları kullanır.
+    /// - PhrasesOnly sadece Phrase itemları kullanır.
+    /// - Mixed Word + Phrase itemlarını birlikte kullanır.
+    /// 
+    /// SentencesOnly şimdilik Faz 19'a bırakılmıştır.
     /// </summary>
     private async Task<IReadOnlyCollection<QuizQuestionCandidate>> BuildQuestionCandidatesAsync(
         IReadOnlyCollection<UserLearningItem> userLearningItems,
+        QuizContentMode quizContentMode,
         CancellationToken cancellationToken)
     {
         var learningItemIds = userLearningItems
@@ -269,10 +284,12 @@ public sealed class StartQuizCommandHandler
             .Distinct()
             .ToArray();
 
+        var allowedItemTypes = ResolveAllowedLearningItemTypes(quizContentMode);
+
         var learningItems = await _learningItemRepository.ListAsync(
             item => learningItemIds.Contains(item.Id)
                     && item.IsActive
-                    && item.ItemType == LearningItemType.Word,
+                    && allowedItemTypes.Contains(item.ItemType),
             cancellationToken);
 
         if (learningItems.Count == 0)
@@ -280,24 +297,30 @@ public sealed class StartQuizCommandHandler
             return Array.Empty<QuizQuestionCandidate>();
         }
 
-        var wordLearningItemIds = learningItems
+        var filteredLearningItemIds = learningItems
             .Select(item => item.Id)
             .Distinct()
             .ToArray();
 
         var userLearningItemsByLearningItemId = userLearningItems
-            .Where(item => wordLearningItemIds.Contains(item.LearningItemId))
+            .Where(item => filteredLearningItemIds.Contains(item.LearningItemId))
             .GroupBy(item => item.LearningItemId)
             .ToDictionary(group => group.Key, group => group.First());
 
         var words = await _wordRepository.ListAsync(
-            word => wordLearningItemIds.Contains(word.LearningItemId),
+            word => filteredLearningItemIds.Contains(word.LearningItemId),
             cancellationToken);
 
         var wordLookup = words.ToDictionary(word => word.LearningItemId);
 
+        var phrases = await _phraseRepository.ListAsync(
+            phrase => filteredLearningItemIds.Contains(phrase.LearningItemId),
+            cancellationToken);
+
+        var phraseLookup = phrases.ToDictionary(phrase => phrase.LearningItemId);
+
         var meanings = await _meaningRepository.ListAsync(
-            meaning => wordLearningItemIds.Contains(meaning.LearningItemId),
+            meaning => filteredLearningItemIds.Contains(meaning.LearningItemId),
             cancellationToken);
 
         var meaningsByLearningItemId = meanings
@@ -319,12 +342,9 @@ public sealed class StartQuizCommandHandler
                 continue;
             }
 
-            if (!wordLookup.TryGetValue(learningItem.Id, out var word))
-            {
-                continue;
-            }
-
-            if (!meaningsByLearningItemId.TryGetValue(learningItem.Id, out var itemMeanings))
+            if (!meaningsByLearningItemId.TryGetValue(
+                    learningItem.Id,
+                    out var itemMeanings))
             {
                 continue;
             }
@@ -338,12 +358,27 @@ public sealed class StartQuizCommandHandler
                 continue;
             }
 
+            var contentText = ResolveCandidateContentText(
+                learningItem,
+                wordLookup,
+                phraseLookup);
+
+            if (string.IsNullOrWhiteSpace(contentText))
+            {
+                continue;
+            }
+
+            wordLookup.TryGetValue(learningItem.Id, out var word);
+            phraseLookup.TryGetValue(learningItem.Id, out var phrase);
+
             candidates.Add(new QuizQuestionCandidate
             {
                 UserLearningItemId = userLearningItem.Id,
                 LearningItemId = learningItem.Id,
-                WordId = word.Id,
-                QuestionText = word.Text,
+                WordId = word?.Id,
+                PhraseId = phrase?.Id,
+                ItemType = learningItem.ItemType,
+                QuestionText = contentText,
                 CorrectMeaningId = correctMeaning.Id,
                 CorrectAnswerText = correctMeaning.MeaningText,
                 PartOfSpeech = correctMeaning.PartOfSpeech
@@ -352,6 +387,119 @@ public sealed class StartQuizCommandHandler
 
         return candidates;
     }
+
+
+    /// <summary>
+    /// QuizContentMode değerine göre hangi LearningItem tiplerinin quizde kullanılabileceğini çözer.
+    /// </summary>
+    private static IReadOnlyCollection<LearningItemType> ResolveAllowedLearningItemTypes(
+        QuizContentMode quizContentMode)
+    {
+        return quizContentMode switch
+        {
+            QuizContentMode.WordsOnly => new[] { LearningItemType.Word },
+            QuizContentMode.PhrasesOnly => new[] { LearningItemType.Phrase },
+            QuizContentMode.Mixed => new[] { LearningItemType.Word, LearningItemType.Phrase },
+
+            // Sentence quiz desteği Faz 19'a bırakıldı.
+            QuizContentMode.SentencesOnly => throw new BusinessRuleException(
+                "Sentence quiz mode is not supported yet. It will be handled in a later phase.",
+                "QUIZ_CONTENT_MODE_NOT_SUPPORTED"),
+
+            _ => throw new BusinessRuleException(
+                "Quiz content mode is not supported.",
+                "QUIZ_CONTENT_MODE_NOT_SUPPORTED")
+        };
+    }
+
+    /// <summary>
+    /// LearningItem tipine göre quizde gösterilecek ana içerik metnini çözer.
+    /// </summary>
+    private static string ResolveCandidateContentText(
+        LearningItem learningItem,
+        IReadOnlyDictionary<Guid, Word> wordLookup,
+        IReadOnlyDictionary<Guid, Phrase> phraseLookup)
+    {
+        return learningItem.ItemType switch
+        {
+            LearningItemType.Word when wordLookup.TryGetValue(learningItem.Id, out var word)
+                => word.Text,
+
+            LearningItemType.Phrase when phraseLookup.TryGetValue(learningItem.Id, out var phrase)
+                => phrase.Text,
+
+            _ => string.Empty
+        };
+    }
+
+    /// <summary>
+    /// API'den gelen quiz type string değerini domain enum değerine çevirir.
+    /// </summary>
+    private static QuizType ParseQuizType(string quizType)
+    {
+        if (Enum.TryParse<QuizType>(
+                quizType?.Trim(),
+                ignoreCase: true,
+                out var parsedQuizType))
+        {
+            return parsedQuizType;
+        }
+
+        throw new BusinessRuleException(
+            $"Quiz type '{quizType}' is not supported.",
+            "QUIZ_TYPE_NOT_SUPPORTED");
+    }
+
+    /// <summary>
+    /// API'den gelen quiz source type string değerini domain enum değerine çevirir.
+    /// 
+    /// Domain enum değeri UserDictionary'dir.
+    /// Ancak eski Swagger/request örneklerinde Dictionary kullanıldığı için
+    /// Dictionary alias değerini de UserDictionary olarak kabul ediyoruz.
+    /// </summary>
+    private static QuizSourceType ParseQuizSourceType(string quizSourceType)
+    {
+        var normalizedQuizSourceType = quizSourceType?.Trim();
+
+        if (string.Equals(
+                normalizedQuizSourceType,
+                "Dictionary",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return QuizSourceType.UserDictionary;
+        }
+
+        if (Enum.TryParse<QuizSourceType>(
+                normalizedQuizSourceType,
+                ignoreCase: true,
+                out var parsedQuizSourceType))
+        {
+            return parsedQuizSourceType;
+        }
+
+        throw new BusinessRuleException(
+            $"Quiz source type '{quizSourceType}' is not supported.",
+            "QUIZ_SOURCE_TYPE_NOT_SUPPORTED");
+    }
+
+    /// <summary>
+    /// API'den gelen quiz content mode string değerini domain enum değerine çevirir.
+    /// </summary>
+    private static QuizContentMode ParseQuizContentMode(string quizContentMode)
+    {
+        if (Enum.TryParse<QuizContentMode>(
+                quizContentMode?.Trim(),
+                ignoreCase: true,
+                out var parsedQuizContentMode))
+        {
+            return parsedQuizContentMode;
+        }
+
+        throw new BusinessRuleException(
+            $"Quiz content mode '{quizContentMode}' is not supported.",
+            "QUIZ_CONTENT_MODE_NOT_SUPPORTED");
+    }
+
 
     /// <summary>
     /// Quiz için doğru anlamı belirler.

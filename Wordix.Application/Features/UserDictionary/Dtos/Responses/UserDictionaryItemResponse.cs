@@ -29,6 +29,17 @@ public sealed class UserDictionaryItemResponse
     /// </summary>
     public Guid? WordId { get; init; }
 
+
+    /// <summary>
+    /// Eğer item Phrase ise Phrase entity id değeridir.
+    /// 
+    /// Word itemlarında null olur.
+    /// Phrase itemlarında dolu olur.
+    /// Ana dictionary/progress/quiz akışı yine LearningItemId üzerinden ilerler.
+    /// </summary>
+    public Guid? PhraseId { get; init; }
+
+
     /// <summary>
     /// İçerik tipi.
     /// 
@@ -37,6 +48,7 @@ public sealed class UserDictionaryItemResponse
     /// Phrase
     /// Sentence
     /// </summary>
+    /// 
     public string ItemType { get; init; } = string.Empty;
 
     /// <summary>

@@ -1,4 +1,6 @@
-﻿namespace Wordix.Application.Features.Quizzes.Models;
+﻿using Wordix.Domain.Enums;
+
+namespace Wordix.Application.Features.Quizzes.Models;
 
 /// <summary>
 /// Quiz sorusu üretmek için kullanılabilecek tek bir aday dictionary item'ı temsil eder.
@@ -33,14 +35,30 @@ public sealed class QuizQuestionCandidate
     /// </summary>
     public Guid? WordId { get; init; }
 
+
     /// <summary>
-    /// Kullanıcıya soru metni olarak gösterilecek değerdir.
+    /// Eğer aday Phrase üzerinden geliyorsa Phrase id değeridir.
+    /// Word adaylarında null olur.
+    /// </summary>
+    public Guid? PhraseId { get; init; }
+
+    /// <summary>
+    /// Adayın içerik tipidir.
     /// 
-    /// İlk prototipte İngilizce kelime olur.
-    /// Örnek:
+    /// Word, Phrase veya ileride Sentence olabilir.
+    /// Generator soru metnini üretirken bu bilgiden yararlanabilir.
+    /// </summary>
+    public LearningItemType ItemType { get; init; }
+
+
+    /// <summary>
+    /// Kullanıcıya soru içinde gösterilecek ana içerik metnidir.
+    /// 
+    /// Word için:
     /// achieve
-    /// study
-    /// learn
+    /// 
+    /// Phrase için:
+    /// give up
     /// </summary>
     public string QuestionText { get; init; } = string.Empty;
 

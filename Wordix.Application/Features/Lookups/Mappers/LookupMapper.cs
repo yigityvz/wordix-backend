@@ -76,6 +76,7 @@ public static class LookupMapper
         {
             LearningItemId = databaseLookupData.LearningItem.Id,
             WordId = databaseLookupData.Word.Id,
+            PhraseId = null,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
@@ -87,6 +88,48 @@ public static class LookupMapper
             Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings)
         };
     }
+
+
+    /// <summary>
+    /// Database'den bulunan phrase lookup sonucunu API response DTO'suna dönüştürür.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Database'e gitmez.
+    /// Repository kullanmaz.
+    /// SaveChanges çağırmaz.
+    /// </summary>
+    public static LookupResponse ToDatabaseLookupResponse(
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        PhraseLookupData databaseLookupData,
+        LookupHistory lookupHistory,
+        bool isAlreadyInUserDictionary)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceLanguage);
+        ArgumentNullException.ThrowIfNull(targetLanguage);
+        ArgumentNullException.ThrowIfNull(databaseLookupData);
+        ArgumentNullException.ThrowIfNull(lookupHistory);
+
+        return new LookupResponse
+        {
+            LearningItemId = databaseLookupData.LearningItem.Id,
+            WordId = null,
+            PhraseId = databaseLookupData.Phrase.Id,
+            LookupHistoryId = lookupHistory.Id,
+            Text = request.Text,
+            NormalizedText = normalizedText,
+            ItemType = databaseLookupData.LearningItem.ItemType.ToString(),
+            SourceLanguageCode = sourceLanguage.Code,
+            TargetLanguageCode = targetLanguage.Code,
+            LookupSource = DatabaseLookupSource,
+            IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
+            Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings)
+        };
+    }
+
 
     /// <summary>
     /// Provider'dan gelen ve sisteme yeni eklenen lookup sonucunu API response DTO'suna dönüştürür.
@@ -120,6 +163,54 @@ public static class LookupMapper
         {
             LearningItemId = learningItem.Id,
             WordId = word.Id,
+            PhraseId = null,
+            LookupHistoryId = lookupHistory.Id,
+            Text = request.Text,
+            NormalizedText = normalizedText,
+            ItemType = learningItem.ItemType.ToString(),
+            SourceLanguageCode = sourceLanguage.Code,
+            TargetLanguageCode = targetLanguage.Code,
+            LookupSource = providerResult.ProviderName,
+            IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
+            Meanings = ToLookupMeaningResponses(meanings)
+        };
+    }
+
+
+
+    /// <summary>
+    /// Provider'dan gelen ve sisteme yeni eklenen phrase lookup sonucunu API response DTO'suna dönüştürür.
+    /// 
+    /// Bu method LearningItem, Phrase, Meaning ve LookupHistory entity'lerini oluşturmaz.
+    /// Onlar handler/use-case tarafında oluşturulur.
+    /// Bu method sadece oluşmuş nesneleri response modeline map eder.
+    /// </summary>
+    public static LookupResponse ToProviderLookupResponse(
+        CreateLookupCommand request,
+        string normalizedText,
+        LanguageLookupData sourceLanguage,
+        LanguageLookupData targetLanguage,
+        DictionaryProviderResult providerResult,
+        LearningItem learningItem,
+        Phrase phrase,
+        IReadOnlyCollection<Meaning> meanings,
+        LookupHistory lookupHistory,
+        bool isAlreadyInUserDictionary)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(sourceLanguage);
+        ArgumentNullException.ThrowIfNull(targetLanguage);
+        ArgumentNullException.ThrowIfNull(providerResult);
+        ArgumentNullException.ThrowIfNull(learningItem);
+        ArgumentNullException.ThrowIfNull(phrase);
+        ArgumentNullException.ThrowIfNull(meanings);
+        ArgumentNullException.ThrowIfNull(lookupHistory);
+
+        return new LookupResponse
+        {
+            LearningItemId = learningItem.Id,
+            WordId = null,
+            PhraseId = phrase.Id,
             LookupHistoryId = lookupHistory.Id,
             Text = request.Text,
             NormalizedText = normalizedText,
