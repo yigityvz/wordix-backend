@@ -43,7 +43,8 @@ public static class QuizMapper
             QuizType = request?.QuizType ?? string.Empty,
             QuizSourceType = request?.QuizSourceType ?? string.Empty,
             QuizContentMode = request?.QuizContentMode ?? string.Empty,
-            QuestionCount = request?.QuestionCount ?? 0
+            QuestionCount = request?.QuestionCount ?? 0,
+            DeckId = request?.DeckId
         };
     }
 

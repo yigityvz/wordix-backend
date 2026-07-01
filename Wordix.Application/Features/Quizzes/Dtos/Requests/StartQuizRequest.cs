@@ -57,4 +57,17 @@ public sealed class StartQuizRequest
     /// Validator aşamasında minimum ve maksimum sınırlar kontrol edilecek.
     /// </summary>
     public int QuestionCount { get; init; }
+
+
+    /// <summary>
+    /// Quiz bir deck üzerinden başlatılacaksa kullanılacak DeckId değeridir.
+    /// 
+    /// Kurallar:
+    /// - QuizSourceType = Deck ise zorunludur.
+    /// - QuizSourceType = UserDictionary ise kullanılmaz.
+    /// 
+    /// Bu alan current user'ın kendi deck id değeri olmalıdır.
+    /// Başka kullanıcıya ait deck ile quiz başlatılamaz.
+    /// </summary>
+    public Guid? DeckId { get; init; }
 }

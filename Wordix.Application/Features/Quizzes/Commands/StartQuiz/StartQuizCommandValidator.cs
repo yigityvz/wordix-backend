@@ -59,6 +59,12 @@ public sealed class StartQuizCommandValidator : AbstractValidator<StartQuizComma
     /// </summary>
     private const int MaximumQuestionCount = 20;
 
+
+    /// <summary>
+    /// Faz 20 itibarıyla desteklenen deck quiz source değeri.
+    /// </summary>
+    private const string DeckQuizSourceType = "Deck";
+
     /// <summary>
     /// Validator kuralları constructor içinde tanımlanır.
     /// </summary>
@@ -79,7 +85,7 @@ public sealed class StartQuizCommandValidator : AbstractValidator<StartQuizComma
             .WithMessage("Quiz source type is required.")
             .WithErrorCode("QUIZ_SOURCE_TYPE_REQUIRED")
             .Must(IsSupportedQuizSourceType)
-            .WithMessage($"Only '{SupportedQuizSourceType}' quiz source type is supported.")
+            .WithMessage($"Only '{SupportedQuizSourceType}', '{DictionaryAliasQuizSourceType}' and '{DeckQuizSourceType}' quiz source types are supported.")
             .WithErrorCode("QUIZ_SOURCE_TYPE_NOT_SUPPORTED");
 
         RuleFor(command => command.QuizContentMode)
@@ -95,6 +101,14 @@ public sealed class StartQuizCommandValidator : AbstractValidator<StartQuizComma
             .InclusiveBetween(MinimumQuestionCount, MaximumQuestionCount)
             .WithMessage($"Question count must be between {MinimumQuestionCount} and {MaximumQuestionCount}.")
             .WithErrorCode("QUESTION_COUNT_OUT_OF_RANGE");
+
+
+        RuleFor(command => command.DeckId)
+            .NotEmpty()
+            .When(command => IsEqualIgnoreCase(command.QuizSourceType, DeckQuizSourceType))
+            .WithMessage("Deck id is required when quiz source type is Deck.")
+            .WithErrorCode("DECK_ID_REQUIRED_FOR_DECK_QUIZ");
+
     }
 
     /// <summary>
@@ -112,7 +126,8 @@ public sealed class StartQuizCommandValidator : AbstractValidator<StartQuizComma
     private static bool IsSupportedQuizSourceType(string? value)
     {
         return IsEqualIgnoreCase(value, SupportedQuizSourceType)
-               || IsEqualIgnoreCase(value, DictionaryAliasQuizSourceType);
+               || IsEqualIgnoreCase(value, DictionaryAliasQuizSourceType)
+               || IsEqualIgnoreCase(value, DeckQuizSourceType);
     }
 
     /// <summary>

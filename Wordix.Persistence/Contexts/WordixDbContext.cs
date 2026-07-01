@@ -100,6 +100,22 @@ public class WordixDbContext : DbContext
     /// </summary>
     public DbSet<UserLearningItem> UserLearningItems => Set<UserLearningItem>();
 
+
+    /// <summary>
+    /// Kullanıcının oluşturduğu çalışma koleksiyonlarını tutar.
+    /// 
+    /// Deck ownership KeycloakUserId ile yapılır.
+    /// </summary>
+    public DbSet<Deck> Decks => Set<Deck>();
+
+    /// <summary>
+    /// Deck içindeki kullanıcı dictionary item bağlantılarını tutar.
+    /// 
+    /// DeckItem doğrudan LearningItemId değil, UserLearningItemId tutar.
+    /// </summary>
+    public DbSet<DeckItem> DeckItems => Set<DeckItem>();
+
+
     /// <summary>
     /// Kullanıcının bir dictionary item üzerindeki güncel öğrenme durumunu tutar.
     /// </summary>

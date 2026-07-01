@@ -47,10 +47,13 @@ public sealed class StartQuizCommandHandler
 
     private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
+    private readonly IRepository<UserLearningItem> _genericUserLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
     private readonly IRepository<Phrase> _phraseRepository;
     private readonly IRepository<Meaning> _meaningRepository;
+    private readonly IRepository<Deck> _deckRepository;
+    private readonly IRepository<DeckItem> _deckItemRepository;
     private readonly IRepository<QuizSession> _quizSessionRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
@@ -70,10 +73,13 @@ public sealed class StartQuizCommandHandler
     public StartQuizCommandHandler(
         ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
+        IRepository<UserLearningItem> genericUserLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
         IRepository<Phrase> phraseRepository,
         IRepository<Meaning> meaningRepository,
+        IRepository<Deck> deckRepository,
+        IRepository<DeckItem> deckItemRepository,
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
@@ -82,10 +88,13 @@ public sealed class StartQuizCommandHandler
     {
         _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
+        _genericUserLearningItemRepository = genericUserLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
         _phraseRepository = phraseRepository;
         _meaningRepository = meaningRepository;
+        _deckRepository = deckRepository;
+        _deckItemRepository = deckItemRepository;
         _quizSessionRepository = quizSessionRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
@@ -114,19 +123,25 @@ public sealed class StartQuizCommandHandler
         var quizSourceType = ParseQuizSourceType(request.QuizSourceType);
         var quizContentMode = ParseQuizContentMode(request.QuizContentMode);
 
-        // 2. Kullanıcının aktif dictionary itemlarını alıyoruz.
-        // QuizSourceType = Dictionary olduğu için global kelimelerden değil,
-        // kullanıcının kendi kaydettiği itemlardan soru üreteceğiz.
+        // 2. Quiz kaynağına göre kullanılacak UserLearningItem listesini çözüyoruz.
         //
-        // Yeni mimaride bu sorgu UserProfileId ile değil KeycloakUserId ile çalışır.
-        var userLearningItems = await _userLearningItemRepository
-            .GetActiveItemsByUserAsync(keycloakUserId, cancellationToken);
+        // UserDictionary:
+        // - Kullanıcının tüm aktif dictionary itemları kullanılır.
+        //
+        // Deck:
+        // - Sadece ilgili deck içindeki UserLearningItem kayıtları kullanılır.
+        // - Deck ownership KeycloakUserId ile kontrol edilir.
+        var userLearningItems = await ResolveUserLearningItemsForQuizSourceAsync(
+            keycloakUserId: keycloakUserId,
+            quizSourceType: quizSourceType,
+            deckId: request.DeckId,
+            cancellationToken: cancellationToken);
 
         if (userLearningItems.Count == 0)
         {
             throw new BusinessRuleException(
-                "You need to save learning items to your dictionary before starting a quiz.",
-                "DICTIONARY_IS_EMPTY");
+                "There are no learning items available for the selected quiz source.",
+                "QUIZ_SOURCE_IS_EMPTY");
         }
 
         // 3. Dictionary itemlarından quiz üretmeye uygun candidate listesi hazırlıyoruz.
@@ -187,7 +202,9 @@ public sealed class StartQuizCommandHandler
              DifficultyGroup.Beginner,
              generationResult.GeneratedQuestionCount,
              includeSystemRecommendations: false,
-             deckId: null);
+             deckId: quizSourceType == QuizSourceType.Deck
+                 ? request.DeckId
+                 : null);
 
         await _quizSessionRepository.AddAsync(
             quizSession,
@@ -262,6 +279,137 @@ public sealed class StartQuizCommandHandler
             request: request,
             quizSession: quizSession,
             questionResponses: createdQuestionResponses);
+    }
+
+
+
+    /// <summary>
+    /// Quiz kaynağına göre hangi UserLearningItem kayıtlarının kullanılacağını çözer.
+    /// 
+    /// UserDictionary:
+    /// - Kullanıcının tüm aktif dictionary itemları kullanılır.
+    /// 
+    /// Deck:
+    /// - Önce deck var mı ve current user'a ait mi kontrol edilir.
+    /// - Sonra sadece o deck içindeki UserLearningItem kayıtları kullanılır.
+    /// 
+    /// Bu method neden var?
+    /// - Handle methodunun okunabilir kalmasını sağlar.
+    /// - UserDictionary ve Deck kaynak seçimini tek yerde toplar.
+    /// - İleride DifficultItems/SystemRecommendations geldiğinde aynı method genişletilebilir.
+    /// </summary>
+    private async Task<IReadOnlyCollection<UserLearningItem>> ResolveUserLearningItemsForQuizSourceAsync(
+        string keycloakUserId,
+        QuizSourceType quizSourceType,
+        Guid? deckId,
+        CancellationToken cancellationToken)
+    {
+        return quizSourceType switch
+        {
+            QuizSourceType.UserDictionary => await GetUserDictionaryItemsForQuizAsync(
+                keycloakUserId,
+                cancellationToken),
+
+            QuizSourceType.Deck => await GetDeckItemsForQuizAsync(
+                keycloakUserId,
+                deckId,
+                cancellationToken),
+
+            _ => throw new BusinessRuleException(
+                "Quiz source type is not supported in the current quiz flow.",
+                "QUIZ_SOURCE_TYPE_NOT_SUPPORTED")
+        };
+    }
+
+    /// <summary>
+    /// UserDictionary kaynaklı quiz için current user'ın tüm aktif dictionary itemlarını getirir.
+    /// </summary>
+    private async Task<IReadOnlyCollection<UserLearningItem>> GetUserDictionaryItemsForQuizAsync(
+        string keycloakUserId,
+        CancellationToken cancellationToken)
+    {
+        var userLearningItems = await _userLearningItemRepository
+            .GetActiveItemsByUserAsync(keycloakUserId, cancellationToken);
+
+        if (userLearningItems.Count == 0)
+        {
+            throw new BusinessRuleException(
+                "You need to save learning items to your dictionary before starting a quiz.",
+                "DICTIONARY_IS_EMPTY");
+        }
+
+        return userLearningItems;
+    }
+
+    /// <summary>
+    /// Deck kaynaklı quiz için sadece ilgili deck içindeki UserLearningItem kayıtlarını getirir.
+    /// 
+    /// Önemli:
+    /// DeckItem doğrudan LearningItemId tutmaz.
+    /// DeckItem -> UserLearningItem -> LearningItem zinciri kullanılır.
+    /// Böylece deck quiz kullanıcı dictionary sistemiyle uyumlu çalışır.
+    /// </summary>
+    private async Task<IReadOnlyCollection<UserLearningItem>> GetDeckItemsForQuizAsync(
+        string keycloakUserId,
+        Guid? deckId,
+        CancellationToken cancellationToken)
+    {
+        if (deckId is null || deckId.Value == Guid.Empty)
+        {
+            throw new BusinessRuleException(
+                "Deck id is required when starting a deck quiz.",
+                "DECK_ID_REQUIRED_FOR_DECK_QUIZ");
+        }
+
+        var deck = await _deckRepository.FirstOrDefaultAsync(
+            deck => deck.Id == deckId.Value && deck.IsActive,
+            cancellationToken);
+
+        if (deck is null)
+        {
+            throw new NotFoundException("Deck", deckId.Value);
+        }
+
+        if (!string.Equals(
+                deck.KeycloakUserId,
+                keycloakUserId,
+                StringComparison.Ordinal))
+        {
+            throw new ForbiddenException(
+                "You cannot start a quiz from another user's deck.");
+        }
+
+        var deckItems = await _deckItemRepository.ListAsync(
+            deckItem => deckItem.DeckId == deck.Id,
+            cancellationToken);
+
+        if (deckItems.Count == 0)
+        {
+            throw new BusinessRuleException(
+                "You need to add learning items to this deck before starting a quiz.",
+                "DECK_IS_EMPTY");
+        }
+
+        var userLearningItemIds = deckItems
+            .Select(deckItem => deckItem.UserLearningItemId)
+            .Distinct()
+            .ToArray();
+
+        var userLearningItems = await _genericUserLearningItemRepository.ListAsync(
+            item =>
+                userLearningItemIds.Contains(item.Id) &&
+                item.KeycloakUserId == keycloakUserId &&
+                item.IsActive,
+            cancellationToken);
+
+        if (userLearningItems.Count == 0)
+        {
+            throw new BusinessRuleException(
+                "This deck does not contain active dictionary items that can be used for a quiz.",
+                "DECK_HAS_NO_ACTIVE_ITEMS");
+        }
+
+        return userLearningItems;
     }
 
     /// <summary>
@@ -403,7 +551,7 @@ public sealed class StartQuizCommandHandler
 
             // Sentence quiz desteği Faz 19'a bırakıldı.
             QuizContentMode.SentencesOnly => throw new BusinessRuleException(
-                "Sentence quiz mode is not supported yet. It will be handled in a later phase.",
+                "Sentence quiz mode is not supported in the current multiple choice quiz flow. It will be handled in the Writing Quiz phase.",
                 "QUIZ_CONTENT_MODE_NOT_SUPPORTED"),
 
             _ => throw new BusinessRuleException(

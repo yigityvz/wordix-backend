@@ -52,4 +52,13 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// Handler gerçek üretilebilen soru sayısını dictionary durumuna göre belirleyecek.
     /// </summary>
     public int QuestionCount { get; init; }
+
+
+    /// <summary>
+    /// Quiz kaynağı Deck ise kullanılacak deck id değeridir.
+    /// 
+    /// QuizSourceType = Deck olduğunda zorunludur.
+    /// QuizSourceType = UserDictionary olduğunda null olabilir.
+    /// </summary>
+    public Guid? DeckId { get; init; }
 }
