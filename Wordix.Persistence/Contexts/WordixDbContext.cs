@@ -102,6 +102,23 @@ public class WordixDbContext : DbContext
 
 
     /// <summary>
+    /// Kullanıcının kendi dictionary item'larına eklediği kişisel notları tutar.
+    /// 
+    /// Notlar global LearningItem'a değil,
+    /// kullanıcının kişisel UserLearningItem kaydına bağlıdır.
+    /// </summary>
+    public DbSet<UserLearningNote> UserLearningNotes => Set<UserLearningNote>();
+
+    /// <summary>
+    /// Kullanıcının kendi dictionary item'larına verdiği Favorite, Difficult gibi flagleri tutar.
+    /// 
+    /// Flagler global LearningItem'a değil,
+    /// kullanıcının kişisel UserLearningItem kaydına bağlıdır.
+    /// </summary>
+    public DbSet<UserLearningFlag> UserLearningFlags => Set<UserLearningFlag>();
+
+
+    /// <summary>
     /// Kullanıcının oluşturduğu çalışma koleksiyonlarını tutar.
     /// 
     /// Deck ownership KeycloakUserId ile yapılır.

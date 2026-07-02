@@ -56,6 +56,7 @@ public sealed class StartQuizCommandHandler
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
+    private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
     private readonly IRepository<QuizSession> _quizSessionRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
@@ -84,6 +85,7 @@ public sealed class StartQuizCommandHandler
         IRepository<Meaning> meaningRepository,
         IRepository<Deck> deckRepository,
         IRepository<DeckItem> deckItemRepository,
+        IRepository<UserLearningFlag> userLearningFlagRepository,
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
@@ -101,6 +103,7 @@ public sealed class StartQuizCommandHandler
         _meaningRepository = meaningRepository;
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
+        _userLearningFlagRepository = userLearningFlagRepository;
         _quizSessionRepository = quizSessionRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
@@ -540,6 +543,28 @@ public sealed class StartQuizCommandHandler
             .GroupBy(item => item.LearningItemId)
             .ToDictionary(group => group.Key, group => group.First());
 
+
+        // Faz 22:
+        // Difficult flag'i olan UserLearningItem kayıtlarını quiz seçiminde öncelikli kullanacağız.
+        //
+        // Burada sadece quiz adayı olabilecek filtrelenmiş UserLearningItem id'lerini kullanıyoruz.
+        // Böylece current user'a ait olmayan veya bu quiz content mode'a girmeyen flagler dikkate alınmaz.
+        var filteredUserLearningItemIds = userLearningItemsByLearningItemId
+            .Values
+            .Select(item => item.Id)
+            .Distinct()
+            .ToArray();
+
+        var difficultFlags = await _userLearningFlagRepository.ListAsync(
+            flag =>
+                filteredUserLearningItemIds.Contains(flag.UserLearningItemId) &&
+                flag.FlagType == UserLearningFlagType.Difficult,
+            cancellationToken);
+
+        var difficultUserLearningItemIds = difficultFlags
+            .Select(flag => flag.UserLearningItemId)
+            .ToHashSet();
+
         var words = await _wordRepository.ListAsync(
             word => filteredLearningItemIds.Contains(word.LearningItemId),
             cancellationToken);
@@ -656,7 +681,8 @@ public sealed class StartQuizCommandHandler
                     QuestionText = sentence.Text,
                     CorrectMeaningId = Guid.Empty,
                     CorrectAnswerText = sentenceTranslation.TranslatedText,
-                    PartOfSpeech = null
+                    PartOfSpeech = null,
+                    IsDifficult = difficultUserLearningItemIds.Contains(sentenceUserLearningItem.Id)
                 });
 
                 continue;
@@ -698,11 +724,13 @@ public sealed class StartQuizCommandHandler
                 LearningItemId = learningItem.Id,
                 WordId = word?.Id,
                 PhraseId = phrase?.Id,
+                SentenceId = null,
                 ItemType = learningItem.ItemType,
                 QuestionText = contentText,
                 CorrectMeaningId = correctMeaning.Id,
                 CorrectAnswerText = correctMeaning.MeaningText,
-                PartOfSpeech = correctMeaning.PartOfSpeech
+                PartOfSpeech = correctMeaning.PartOfSpeech,
+                IsDifficult = difficultUserLearningItemIds.Contains(userLearningItem.Id)
             });
         }
 

@@ -4,6 +4,11 @@ using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
 using Wordix.Application.Features.UserDictionary.Commands.SaveSentenceToDictionary;
+using Wordix.Application.Features.UserDictionary.Commands.CreateUserLearningNote;
+using Wordix.Application.Features.UserDictionary.Commands.UpdateUserLearningNote;
+using Wordix.Application.Features.UserDictionary.Commands.DeleteUserLearningNote;
+using Wordix.Application.Features.UserDictionary.Commands.SetUserLearningFlag;
+using Wordix.Application.Features.UserDictionary.Commands.RemoveUserLearningFlag;
 
 namespace Wordix.Application.Features.UserDictionary.Mappers;
 
@@ -63,6 +68,187 @@ public static class UserDictionaryMapper
             SourceLookupHistoryId = request?.SourceLookupHistoryId
         };
     }
+
+
+    /// <summary>
+    /// Route'tan gelen UserLearningItemId ve API request DTO'sunu
+    /// CreateUserLearningNoteCommand modeline dönüştürür.
+    /// 
+    /// Controller null body kontrolü yapmaz.
+    /// Request null gelirse NoteText boş string olur.
+    /// Validator bu durumu yakalar.
+    /// </summary>
+    public static CreateUserLearningNoteCommand ToCreateUserLearningNoteCommand(
+        Guid userLearningItemId,
+        CreateUserLearningNoteRequest? request)
+    {
+        return new CreateUserLearningNoteCommand
+        {
+            UserLearningItemId = userLearningItemId,
+            NoteText = request?.NoteText ?? string.Empty
+        };
+    }
+
+    /// <summary>
+    /// UserLearningNote entity'sini API response DTO'suna dönüştürür.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Repository kullanmaz.
+    /// SaveChanges çağırmaz.
+    /// </summary>
+    public static UserLearningNoteResponse ToUserLearningNoteResponse(
+        UserLearningNote note)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+
+        return new UserLearningNoteResponse
+        {
+            UserLearningNoteId = note.Id,
+            UserLearningItemId = note.UserLearningItemId,
+            NoteText = note.NoteText,
+            CreatedAt = note.CreatedAt,
+            UpdatedAt = note.UpdatedAt
+        };
+    }
+
+
+    /// <summary>
+    /// UserLearningNote entity listesini not listeleme response DTO'suna dönüştürür.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Sıralama, ownership ve database sorgusu handler sorumluluğundadır.
+    /// </summary>
+    public static GetUserLearningNotesResponse ToGetUserLearningNotesResponse(
+        IReadOnlyCollection<UserLearningNote> notes)
+    {
+        ArgumentNullException.ThrowIfNull(notes);
+
+        var items = notes
+            .Select(ToUserLearningNoteResponse)
+            .ToArray();
+
+        return new GetUserLearningNotesResponse
+        {
+            TotalCount = items.Length,
+            Items = items
+        };
+    }
+
+
+    /// <summary>
+    /// Route'tan gelen UserLearningNoteId ve API request DTO'sunu
+    /// UpdateUserLearningNoteCommand modeline dönüştürür.
+    /// 
+    /// Controller null body kontrolü yapmaz.
+    /// Request null gelirse NoteText boş string olur.
+    /// Validator bu durumu yakalar.
+    /// </summary>
+    public static UpdateUserLearningNoteCommand ToUpdateUserLearningNoteCommand(
+        Guid userLearningNoteId,
+        UpdateUserLearningNoteRequest? request)
+    {
+        return new UpdateUserLearningNoteCommand
+        {
+            UserLearningNoteId = userLearningNoteId,
+            NoteText = request?.NoteText ?? string.Empty
+        };
+    }
+
+
+    /// <summary>
+    /// Route'tan gelen UserLearningNoteId değerini
+    /// DeleteUserLearningNoteCommand modeline dönüştürür.
+    /// 
+    /// Delete endpointinde body olmadığı için sadece route id map edilir.
+    /// </summary>
+    public static DeleteUserLearningNoteCommand ToDeleteUserLearningNoteCommand(
+        Guid userLearningNoteId)
+    {
+        return new DeleteUserLearningNoteCommand(userLearningNoteId);
+    }
+
+
+
+    /// <summary>
+    /// Route'tan gelen UserLearningItemId ve API request DTO'sunu
+    /// SetUserLearningFlagCommand modeline dönüştürür.
+    /// 
+    /// Controller null body kontrolü yapmaz.
+    /// Request null gelirse FlagType boş string olur.
+    /// Validator bu durumu yakalar.
+    /// </summary>
+    public static SetUserLearningFlagCommand ToSetUserLearningFlagCommand(
+        Guid userLearningItemId,
+        SetUserLearningFlagRequest? request)
+    {
+        return new SetUserLearningFlagCommand
+        {
+            UserLearningItemId = userLearningItemId,
+            FlagType = request?.FlagType ?? string.Empty
+        };
+    }
+
+    /// <summary>
+    /// UserLearningFlag entity'sini API response DTO'suna dönüştürür.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Repository kullanmaz.
+    /// SaveChanges çağırmaz.
+    /// </summary>
+    public static UserLearningFlagResponse ToUserLearningFlagResponse(
+        UserLearningFlag flag)
+    {
+        ArgumentNullException.ThrowIfNull(flag);
+
+        return new UserLearningFlagResponse
+        {
+            UserLearningFlagId = flag.Id,
+            UserLearningItemId = flag.UserLearningItemId,
+            FlagType = flag.FlagType.ToString(),
+            CreatedAt = flag.CreatedAt
+        };
+    }
+
+
+
+    /// <summary>
+    /// UserLearningFlag entity listesini flag listeleme response DTO'suna dönüştürür.
+    /// 
+    /// Bu method sadece mapping yapar.
+    /// Sıralama, ownership ve database sorgusu handler sorumluluğundadır.
+    /// </summary>
+    public static GetUserLearningFlagsResponse ToGetUserLearningFlagsResponse(
+        IReadOnlyCollection<UserLearningFlag> flags)
+    {
+        ArgumentNullException.ThrowIfNull(flags);
+
+        var items = flags
+            .Select(ToUserLearningFlagResponse)
+            .ToArray();
+
+        return new GetUserLearningFlagsResponse
+        {
+            TotalCount = items.Length,
+            Items = items
+        };
+    }
+
+
+    /// <summary>
+    /// Route'tan gelen UserLearningItemId ve FlagType değerlerini
+    /// RemoveUserLearningFlagCommand modeline dönüştürür.
+    /// 
+    /// Delete endpointinde body olmadığı için sadece route değerleri map edilir.
+    /// </summary>
+    public static RemoveUserLearningFlagCommand ToRemoveUserLearningFlagCommand(
+        Guid userLearningItemId,
+        string? flagType)
+    {
+        return new RemoveUserLearningFlagCommand(
+            userLearningItemId,
+            flagType ?? string.Empty);
+    }
+
 
     /// <summary>
     /// Yeni dictionary kaydı oluşturulduktan sonra API'ye dönecek response modelini üretir.
@@ -175,7 +361,9 @@ public static class UserDictionaryMapper
         IReadOnlyDictionary<Guid, Meaning[]> meaningsByLearningItemId,
         IReadOnlyDictionary<Guid, SentenceTranslation[]> sentenceTranslationsBySentenceId,
         IReadOnlyDictionary<Guid, UserLearningProgress> progressLookup,
-        IReadOnlyDictionary<Guid, Language> languageLookup)
+        IReadOnlyDictionary<Guid, Language> languageLookup,
+        IReadOnlyDictionary<Guid, int>? noteCountsByUserLearningItemId = null,
+        IReadOnlyDictionary<Guid, UserLearningFlag[]>? flagsByUserLearningItemId = null)
     {
         ArgumentNullException.ThrowIfNull(userLearningItem);
         ArgumentNullException.ThrowIfNull(learningItemLookup);
@@ -201,6 +389,24 @@ public static class UserDictionaryMapper
         meaningsByLearningItemId.TryGetValue(learningItem.Id, out var meanings);
         progressLookup.TryGetValue(userLearningItem.Id, out var progress);
 
+
+        var noteCount = 0;
+
+        if (noteCountsByUserLearningItemId is not null)
+        {
+            noteCountsByUserLearningItemId.TryGetValue(
+                userLearningItem.Id,
+                out noteCount);
+        }
+
+        UserLearningFlag[] flags = Array.Empty<UserLearningFlag>();
+
+        if (flagsByUserLearningItemId is not null &&
+            flagsByUserLearningItemId.TryGetValue(userLearningItem.Id, out var foundFlags))
+        {
+            flags = foundFlags;
+        }
+
         SentenceTranslation? sentenceTranslation = null;
         Language? targetLanguage = null;
 
@@ -225,7 +431,9 @@ public static class UserDictionaryMapper
             meanings: meanings ?? Array.Empty<Meaning>(),
             sentenceTranslation: sentenceTranslation,
             targetLanguage: targetLanguage,
-            progress: progress);
+            progress: progress,
+            noteCount: noteCount,
+            flags: flags);
     }
 
     /// <summary>
@@ -244,7 +452,9 @@ public static class UserDictionaryMapper
         IReadOnlyCollection<Meaning> meanings,
         SentenceTranslation? sentenceTranslation,
         Language? targetLanguage,
-        UserLearningProgress? progress)
+        UserLearningProgress? progress,
+        int noteCount = 0,
+        IReadOnlyCollection<UserLearningFlag>? flags = null)
     {
         ArgumentNullException.ThrowIfNull(userLearningItem);
         ArgumentNullException.ThrowIfNull(learningItem);
@@ -274,6 +484,13 @@ public static class UserDictionaryMapper
         : ToUserDictionarySentenceTranslationResponse(sentenceTranslation, targetLanguage),
             SavedAt = userLearningItem.SavedAt,
             SourceLookupHistoryId = userLearningItem.SourceLookupHistoryId,
+
+            IsFavorite = HasFlag(flags, UserLearningFlagType.Favorite),
+            IsDifficult = HasFlag(flags, UserLearningFlagType.Difficult),
+            WantsMorePractice = HasFlag(flags, UserLearningFlagType.WantMorePractice),
+            IsIgnored = HasFlag(flags, UserLearningFlagType.Ignored),
+            NoteCount = noteCount,
+
             LearningStatus = progress?.LearningStatus.ToString() ?? string.Empty,
             LearningConfidenceScore = progress?.LearningConfidenceScore ?? 0,
             IsActive = userLearningItem.IsActive
@@ -362,6 +579,27 @@ public static class UserDictionaryMapper
         return meanings
             .OrderBy(meaning => meaning.DisplayOrder)
             .FirstOrDefault();
+    }
+
+
+
+    /// <summary>
+    /// Verilen flag koleksiyonunda istenen flag tipi var mı kontrol eder.
+    /// 
+    /// Bu helper neden var?
+    /// - IsFavorite, IsDifficult gibi response alanlarını tek tek LINQ ile tekrar etmek istemiyoruz.
+    /// - Flag kontrol kuralı tek yerde dursun istiyoruz.
+    /// </summary>
+    private static bool HasFlag(
+        IReadOnlyCollection<UserLearningFlag>? flags,
+        UserLearningFlagType flagType)
+    {
+        if (flags is null || flags.Count == 0)
+        {
+            return false;
+        }
+
+        return flags.Any(flag => flag.FlagType == flagType);
     }
 
 

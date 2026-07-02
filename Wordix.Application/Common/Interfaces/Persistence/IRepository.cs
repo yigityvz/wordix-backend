@@ -64,6 +64,8 @@ public interface IRepository<TEntity>
         Expression<Func<TEntity, bool>> predicate,
         CancellationToken cancellationToken = default);
 
+
+
     /// <summary>
     /// Belirli bir şarta uyan entity listesini getirir.
     /// 

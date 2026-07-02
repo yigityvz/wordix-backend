@@ -62,10 +62,14 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
             return Task.FromResult(new QuizQuestionGenerationResult());
         }
 
-        // Soru olacak adayları karıştırıp istenen soru sayısı kadar seçiyoruz.
-        var selectedQuestionCandidates = Shuffle(candidates)
-            .Take(request.RequestedQuestionCount)
-            .ToArray();
+        // Soru olacak adayları seçiyoruz.
+        //
+        // Faz 22 itibarıyla Difficult olarak işaretlenen itemlar
+        // seçim sırasında öncelikli değerlendirilir.
+        var selectedQuestionCandidates = QuizQuestionCandidateSelector
+            .SelectWithDifficultPriority(
+                candidates,
+                request.RequestedQuestionCount);
 
         var generatedQuestions = new List<GeneratedQuizQuestion>();
 

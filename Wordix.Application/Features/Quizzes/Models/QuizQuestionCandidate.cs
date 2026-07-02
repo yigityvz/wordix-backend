@@ -76,6 +76,19 @@ public sealed class QuizQuestionCandidate
     /// </summary>
     public string QuestionText { get; init; } = string.Empty;
 
+
+    /// <summary>
+    /// Kullanıcı bu dictionary item'ı Difficult olarak işaretledi mi?
+    /// 
+    /// Faz 22 UserLearningFlag desteğiyle gelir.
+    /// Bu bilgi quiz generator tarafından soru seçimi sırasında öncelik sinyali olarak kullanılır.
+    /// 
+    /// Önemli:
+    /// Bu alan database entity alanı değildir.
+    /// Sadece quiz candidate üretimi sırasında kullanılan application model bilgisidir.
+    /// </summary>
+    public bool IsDifficult { get; init; }
+
     /// <summary>
     /// Doğru cevabın Meaning id değeridir.
     /// 

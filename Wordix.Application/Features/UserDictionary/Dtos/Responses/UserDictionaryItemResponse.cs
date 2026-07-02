@@ -138,6 +138,44 @@ public sealed class UserDictionaryItemResponse
     /// </summary>
     public int LearningConfidenceScore { get; init; }
 
+
+
+    /// <summary>
+    /// Kullanıcı bu dictionary item'ı favori olarak işaretledi mi?
+    /// 
+    /// UserLearningFlagType.Favorite kaydı varsa true olur.
+    /// </summary>
+    public bool IsFavorite { get; init; }
+
+    /// <summary>
+    /// Kullanıcı bu dictionary item'ı zor olarak işaretledi mi?
+    /// 
+    /// UserLearningFlagType.Difficult kaydı varsa true olur.
+    /// Faz 22G'de quiz önceliğine etki edecek ana flag budur.
+    /// </summary>
+    public bool IsDifficult { get; init; }
+
+    /// <summary>
+    /// Kullanıcı bu item için daha fazla pratik yapmak istiyor mu?
+    /// 
+    /// UserLearningFlagType.WantMorePractice kaydı varsa true olur.
+    /// </summary>
+    public bool WantsMorePractice { get; init; }
+
+    /// <summary>
+    /// Kullanıcı bu item'ı şimdilik göz ardı etmek istiyor mu?
+    /// 
+    /// UserLearningFlagType.Ignored kaydı varsa true olur.
+    /// Bu fazda quiz dışlama kuralı uygulamayacağız; sadece response bilgisini döneceğiz.
+    /// </summary>
+    public bool IsIgnored { get; init; }
+
+    /// <summary>
+    /// Kullanıcının bu dictionary item üzerine yazdığı toplam not sayısıdır.
+    /// </summary>
+    public int NoteCount { get; init; }
+
+
     /// <summary>
     /// Bu item kullanıcı dictionary'sinde aktif mi?
     /// Silme/arsivleme ileride soft delete gibi davranabilir.

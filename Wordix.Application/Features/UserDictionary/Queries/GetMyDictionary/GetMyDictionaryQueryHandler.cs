@@ -41,6 +41,8 @@ public sealed class GetMyDictionaryQueryHandler
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
+    private readonly IRepository<UserLearningNote> _userLearningNoteRepository;
+    private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
 
     /// <summary>
     /// Handler ihtiyacı olan repository ve servisleri DI üzerinden alır.
@@ -62,7 +64,10 @@ public sealed class GetMyDictionaryQueryHandler
         IRepository<SentenceTranslation> sentenceTranslationRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
-        IRepository<UserLearningProgress> userLearningProgressRepository)
+        IRepository<UserLearningProgress> userLearningProgressRepository,
+        IRepository<UserLearningNote> userLearningNoteRepository,
+        IRepository<UserLearningFlag> userLearningFlagRepository)
+
     {
         _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
@@ -74,6 +79,8 @@ public sealed class GetMyDictionaryQueryHandler
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
+        _userLearningNoteRepository = userLearningNoteRepository;
+        _userLearningFlagRepository = userLearningFlagRepository;
     }
 
     /// <summary>
@@ -207,18 +214,45 @@ public sealed class GetMyDictionaryQueryHandler
 
         var languageLookup = languages.ToDictionary(language => language.Id);
 
+
+        // Dictionary listesinde her item için note/flag özetini göstermek istiyoruz.
+        //
+        // Burada her item için ayrı ayrı query atmak yerine,
+        // current user'ın dönen UserLearningItem id'leri üzerinden toplu sorgu yapıyoruz
+
+        var notes = await _userLearningNoteRepository.ListAsync(
+            note => userLearningItemIds.Contains(note.UserLearningItemId),
+            cancellationToken);
+
+        var noteCountsByUserLearningItemId = notes
+            .GroupBy(note => note.UserLearningItemId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.Count());
+
+        var flags = await _userLearningFlagRepository.ListAsync(
+            flag => userLearningItemIds.Contains(flag.UserLearningItemId),
+            cancellationToken);
+
+        var flagsByUserLearningItemId = flags
+            .GroupBy(flag => flag.UserLearningItemId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.ToArray());
+
         var responseItems = userLearningItems
-            .OrderByDescending(item => item.SavedAt)
             .Select(item => UserDictionaryMapper.ToUserDictionaryItemResponse(
                 userLearningItem: item,
                 learningItemLookup: learningItemLookup,
                 wordLookup: wordLookup,
                 phraseLookup: phraseLookup,
                 sentenceLookup: sentenceLookup,
-                sentenceTranslationsBySentenceId: sentenceTranslationsBySentenceId,
                 meaningsByLearningItemId: meaningsByLearningItemId,
+                sentenceTranslationsBySentenceId: sentenceTranslationsBySentenceId,
                 progressLookup: progressLookup,
-                languageLookup: languageLookup))
+                languageLookup: languageLookup,
+                noteCountsByUserLearningItemId: noteCountsByUserLearningItemId,
+                flagsByUserLearningItemId: flagsByUserLearningItemId))
             .Where(item => item is not null)
             .Select(item => item!)
             .ToArray();

@@ -1,12 +1,14 @@
 ﻿using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Wordix.Application.Features.UserDictionary.Dtos.Requests;
+using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
 using Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 using Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryItemById;
-using Wordix.Application.Features.UserDictionary.Dtos.Requests;
-using Wordix.Application.Features.UserDictionary.Dtos.Responses;
+using Wordix.Application.Features.UserDictionary.Queries.GetUserLearningNotes;
 using Wordix.Shared.Responses;
+using Wordix.Application.Features.UserDictionary.Queries.GetUserLearningFlags;
 
 namespace Wordix.Api.Controllers;
 
@@ -142,6 +144,286 @@ public sealed class UserDictionaryController : ControllerBase
             value: apiResponse);
     }
 
+
+    /// <summary>
+    /// Current user'ın kendi dictionary item'ına kişisel not eklemesini sağlar.
+    /// 
+    /// Endpoint:
+    /// POST /api/user-dictionary/{userLearningItemId}/notes
+    /// 
+    /// Buradaki userLearningItemId:
+    /// - Global LearningItemId değildir.
+    /// - Kullanıcının kişisel UserLearningItem.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler, UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait item'a not eklenemez.
+    /// </summary>
+    [HttpPost("{userLearningItemId:guid}/notes")]
+    [ProducesResponseType(typeof(ApiResponse<UserLearningNoteResponse>), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<UserLearningNoteResponse>>> CreateUserLearningNote(
+        Guid userLearningItemId,
+        [FromBody] CreateUserLearningNoteRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToCreateUserLearningNoteCommand(
+            userLearningItemId,
+            request);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        return Created(
+            uri: $"api/user-dictionary/{userLearningItemId}/notes/{response.UserLearningNoteId}",
+            value: ApiResponse<UserLearningNoteResponse>.Ok(
+                data: response,
+                message: "User learning note created successfully."));
+    }
+
+
+
+    /// <summary>
+    /// Current user'ın kendi dictionary item'ına ait kişisel notları listeler.
+    /// 
+    /// Endpoint:
+    /// GET /api/user-dictionary/{userLearningItemId}/notes
+    /// 
+    /// Buradaki userLearningItemId:
+    /// - Global LearningItemId değildir.
+    /// - Kullanıcının kişisel UserLearningItem.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler, UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait item'ın notları listelenemez.
+    /// </summary>
+    [HttpGet("{userLearningItemId:guid}/notes")]
+    [ProducesResponseType(typeof(ApiResponse<GetUserLearningNotesResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<GetUserLearningNotesResponse>>> GetUserLearningNotes(
+        Guid userLearningItemId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetUserLearningNotesQuery(userLearningItemId);
+
+        var response = await _sender.Send(query, cancellationToken);
+
+        return Ok(ApiResponse<GetUserLearningNotesResponse>.Ok(
+            data: response,
+            message: "User learning notes retrieved successfully."));
+    }
+
+
+
+    /// <summary>
+    /// Current user'ın kendi kişisel notunu günceller.
+    /// 
+    /// Endpoint:
+    /// PUT /api/user-dictionary/notes/{noteId}
+    /// 
+    /// Buradaki noteId:
+    /// - UserLearningNote.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler önce note'u bulur,
+    /// sonra note.UserLearningItemId üzerinden UserLearningItem'a gider,
+    /// sonra UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait not güncellenemez.
+    /// </summary>
+    [HttpPut("notes/{noteId:guid}")]
+    [ProducesResponseType(typeof(ApiResponse<UserLearningNoteResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<UserLearningNoteResponse>>> UpdateUserLearningNote(
+        Guid noteId,
+        [FromBody] UpdateUserLearningNoteRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToUpdateUserLearningNoteCommand(
+            noteId,
+            request);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        return Ok(ApiResponse<UserLearningNoteResponse>.Ok(
+            data: response,
+            message: "User learning note updated successfully."));
+    }
+
+
+    /// <summary>
+    /// Current user'ın kendi kişisel notunu siler.
+    /// 
+    /// Endpoint:
+    /// DELETE /api/user-dictionary/notes/{noteId}
+    /// 
+    /// Buradaki noteId:
+    /// - UserLearningNote.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler önce note'u bulur,
+    /// sonra note.UserLearningItemId üzerinden UserLearningItem'a gider,
+    /// sonra UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait not silinemez.
+    /// </summary>
+    [HttpDelete("notes/{noteId:guid}")]
+    [ProducesResponseType(typeof(ApiResponse<UserLearningNoteResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<UserLearningNoteResponse>>> DeleteUserLearningNote(
+        Guid noteId,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToDeleteUserLearningNoteCommand(noteId);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        return Ok(ApiResponse<UserLearningNoteResponse>.Ok(
+            data: response,
+            message: "User learning note deleted successfully."));
+    }
+
+
+    /// <summary>
+    /// Current user'ın kendi dictionary item'ına Favorite, Difficult gibi flag eklemesini sağlar.
+    /// 
+    /// Endpoint:
+    /// POST /api/user-dictionary/{userLearningItemId}/flags
+    /// 
+    /// Örnek request:
+    /// {
+    ///   "flagType": "Difficult"
+    /// }
+    /// 
+    /// Buradaki userLearningItemId:
+    /// - Global LearningItemId değildir.
+    /// - Kullanıcının kişisel UserLearningItem.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler, UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait item'a flag eklenemez.
+    /// 
+    /// Davranış:
+    /// Aynı flag zaten varsa hata verilmez, mevcut flag response olarak döner.
+    /// </summary>
+    [HttpPost("{userLearningItemId:guid}/flags")]
+    [ProducesResponseType(typeof(ApiResponse<UserLearningFlagResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<UserLearningFlagResponse>>> SetUserLearningFlag(
+        Guid userLearningItemId,
+        [FromBody] SetUserLearningFlagRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToSetUserLearningFlagCommand(
+            userLearningItemId,
+            request);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        return Ok(ApiResponse<UserLearningFlagResponse>.Ok(
+            data: response,
+            message: "User learning flag set successfully."));
+    }
+
+
+
+    /// <summary>
+    /// Current user'ın kendi dictionary item'ına ait flagleri listeler.
+    /// 
+    /// Endpoint:
+    /// GET /api/user-dictionary/{userLearningItemId}/flags
+    /// 
+    /// Buradaki userLearningItemId:
+    /// - Global LearningItemId değildir.
+    /// - Kullanıcının kişisel UserLearningItem.Id değeridir.
+    /// 
+    /// Ownership:
+    /// Handler, UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait item'ın flagleri listelenemez.
+    /// </summary>
+    [HttpGet("{userLearningItemId:guid}/flags")]
+    [ProducesResponseType(typeof(ApiResponse<GetUserLearningFlagsResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<GetUserLearningFlagsResponse>>> GetUserLearningFlags(
+        Guid userLearningItemId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetUserLearningFlagsQuery(userLearningItemId);
+
+        var response = await _sender.Send(query, cancellationToken);
+
+        return Ok(ApiResponse<GetUserLearningFlagsResponse>.Ok(
+            data: response,
+            message: "User learning flags retrieved successfully."));
+    }
+
+
+    /// <summary>
+    /// Current user'ın kendi dictionary item'ından belirli bir flag'i kaldırır.
+    /// 
+    /// Endpoint:
+    /// DELETE /api/user-dictionary/{userLearningItemId}/flags/{flagType}
+    /// 
+    /// Örnek:
+    /// DELETE /api/user-dictionary/{userLearningItemId}/flags/Difficult
+    /// 
+    /// Buradaki userLearningItemId:
+    /// - Global LearningItemId değildir.
+    /// - Kullanıcının kişisel UserLearningItem.Id değeridir.
+    /// 
+    /// flagType:
+    /// - Favorite
+    /// - Difficult
+    /// - WantMorePractice
+    /// - Ignored
+    /// 
+    /// Ownership:
+    /// Handler, UserLearningItem.KeycloakUserId ile current user'ın KeycloakUserId değerini karşılaştırır.
+    /// Başka kullanıcıya ait item'ın flag'i kaldırılamaz.
+    /// </summary>
+    [HttpDelete("{userLearningItemId:guid}/flags/{flagType}")]
+    [ProducesResponseType(typeof(ApiResponse<UserLearningFlagResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status500InternalServerError)]
+    public async Task<ActionResult<ApiResponse<UserLearningFlagResponse>>> RemoveUserLearningFlag(
+        Guid userLearningItemId,
+        string flagType,
+        CancellationToken cancellationToken)
+    {
+        var command = UserDictionaryMapper.ToRemoveUserLearningFlagCommand(
+            userLearningItemId,
+            flagType);
+
+        var response = await _sender.Send(command, cancellationToken);
+
+        return Ok(ApiResponse<UserLearningFlagResponse>.Ok(
+            data: response,
+            message: "User learning flag removed successfully."));
+    }
 
 
     /// <summary>

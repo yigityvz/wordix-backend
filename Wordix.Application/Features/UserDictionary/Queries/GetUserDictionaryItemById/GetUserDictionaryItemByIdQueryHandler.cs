@@ -42,6 +42,8 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Language> _languageRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
+    private readonly IRepository<UserLearningNote> _userLearningNoteRepository;
+    private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
 
     /// <summary>
     /// Handler ihtiyacı olan servis ve repository abstraction'larını DI üzerinden alır.
@@ -63,7 +65,9 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         IRepository<SentenceTranslation> sentenceTranslationRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Language> languageRepository,
-        IRepository<UserLearningProgress> userLearningProgressRepository)
+        IRepository<UserLearningProgress> userLearningProgressRepository,
+        IRepository<UserLearningNote> userLearningNoteRepository,
+        IRepository<UserLearningFlag> userLearningFlagRepository)
     {
         _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
@@ -75,6 +79,8 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         _meaningRepository = meaningRepository;
         _languageRepository = languageRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
+        _userLearningNoteRepository = userLearningNoteRepository;
+        _userLearningFlagRepository = userLearningFlagRepository;
     }
 
     /// <summary>
@@ -181,6 +187,18 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             }
         }
 
+        // Detay response içinde note/flag özetini göstermek için
+        // ilgili UserLearningItem'a bağlı not ve flagleri çekiyoruz.
+        var notes = await _userLearningNoteRepository.ListAsync(
+            note => note.UserLearningItemId == userLearningItem.Id,
+            cancellationToken);
+
+        var noteCount = notes.Count;
+
+        var flags = await _userLearningFlagRepository.ListAsync(
+            flag => flag.UserLearningItemId == userLearningItem.Id,
+            cancellationToken);
+
         // 8. Bu dictionary item'a ait progress kaydını alıyoruz.
         var progress = await _userLearningProgressRepository.FirstOrDefaultAsync(
             progress => progress.UserLearningItemId == userLearningItem.Id,
@@ -200,7 +218,9 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
             meanings: meanings,
             sentenceTranslation: sentenceTranslation,
             targetLanguage: targetLanguage,
-            progress: progress);
+            progress: progress,
+            noteCount: noteCount,
+            flags: flags);
     }
 
 }

@@ -67,9 +67,14 @@ public sealed class WrittenTranslationQuestionGenerator : IQuizQuestionGenerator
             return Task.FromResult(new QuizQuestionGenerationResult());
         }
 
-        var selectedQuestionCandidates = Shuffle(candidates)
-            .Take(request.RequestedQuestionCount)
-            .ToArray();
+        // Soru olacak adayları seçiyoruz.
+        //
+        // Faz 22 itibarıyla Difficult olarak işaretlenen itemlar
+        // seçim sırasında öncelikli değerlendirilir.
+        var selectedQuestionCandidates = QuizQuestionCandidateSelector
+            .SelectWithDifficultPriority(
+                candidates,
+                request.RequestedQuestionCount);
 
         var generatedQuestions = selectedQuestionCandidates
             .Select((candidate, index) => new GeneratedQuizQuestion
@@ -147,17 +152,4 @@ public sealed class WrittenTranslationQuestionGenerator : IQuizQuestionGenerator
         };
     }
 
-    /// <summary>
-    /// Koleksiyonu basit şekilde karıştırır.
-    /// 
-    /// İlk prototip için Random.Shared yeterlidir.
-    /// İleride unit testlerde deterministik random ihtiyacı doğarsa random abstraction eklenebilir.
-    /// </summary>
-    private static IReadOnlyList<T> Shuffle<T>(
-        IEnumerable<T> items)
-    {
-        return items
-            .OrderBy(_ => Random.Shared.Next())
-            .ToArray();
-    }
 }

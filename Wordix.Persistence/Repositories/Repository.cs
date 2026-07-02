@@ -127,6 +127,9 @@ public class Repository<TEntity> : IRepository<TEntity>
             .AnyAsync(predicate, cancellationToken);
     }
 
+
+
+
     /// <summary>
     /// Entity listesini getirir.
     /// 
