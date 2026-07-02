@@ -51,6 +51,12 @@ public static class QuizMapper
     /// <summary>
     /// Route'tan gelen quizSessionId ve API request DTO'sunu
     /// SubmitQuizAnswerCommand modeline dönüştürür.
+    /// 
+    /// Test quiz:
+    /// - SelectedQuizOptionId gelir.
+    /// 
+    /// Writing quiz:
+    /// - QuizQuestionId + UserAnswer gelir.
     /// </summary>
     public static SubmitQuizAnswerCommand ToSubmitQuizAnswerCommand(
         Guid quizSessionId,
@@ -58,7 +64,9 @@ public static class QuizMapper
     {
         return new SubmitQuizAnswerCommand(
             quizSessionId,
-            request?.SelectedQuizOptionId ?? Guid.Empty,
+            request?.QuizQuestionId,
+            request?.SelectedQuizOptionId,
+            request?.UserAnswer,
             request?.QuestionResponseTimeInMilliseconds);
     }
 
@@ -106,6 +114,7 @@ public static class QuizMapper
             LearningItemId = quizQuestion.LearningItemId,
             WordId = generatedQuestion.WordId,
             PhraseId = generatedQuestion.PhraseId,
+            SentenceId = generatedQuestion.SentenceId,
             ItemType = generatedQuestion.ItemType.ToString(),
 
             // API response'ta generator'ın daha açıklayıcı question type değerini döndürüyoruz.
@@ -144,27 +153,43 @@ public static class QuizMapper
     }
 
     /// <summary>
-    /// GeneratedQuizQuestion içindeki doğru seçeneğin metnini bulur.
+    /// GeneratedQuizQuestion içinden doğru cevap snapshot'ını çözer.
     /// 
-    /// QuizQuestion entity, doğru cevabı string olarak saklıyor.
-    /// Bu yüzden doğru option'ın OptionText değerini CorrectAnswer alanına yazıyoruz.
+    /// Test quiz:
+    /// - CorrectAnswerText doluysa onu kullanır.
+    /// - Geriye uyumluluk için doğru option metnine de düşebilir.
+    /// 
+    /// Writing quiz:
+    /// - Options boş olduğu için CorrectAnswerText zorunludur.
+    /// 
+    /// Bu snapshot QuizQuestion.CorrectAnswer alanına yazılır.
+    /// Böylece içerik sonradan değişse bile quiz sırasında beklenen doğru cevap korunur.
     /// </summary>
     public static string ResolveCorrectAnswerText(
         GeneratedQuizQuestion generatedQuestion)
     {
         ArgumentNullException.ThrowIfNull(generatedQuestion);
 
+        // Faz 21 ile GeneratedQuizQuestion artık doğru cevap metnini doğrudan taşır.
+        // Writing quizde option olmadığı için öncelik burasıdır.
+        if (!string.IsNullOrWhiteSpace(generatedQuestion.CorrectAnswerText))
+        {
+            return generatedQuestion.CorrectAnswerText.Trim();
+        }
+
+        // Eski Test quiz davranışı için fallback:
+        // Eğer CorrectAnswerText boşsa doğru option metnine bakarız.
         var correctOption = generatedQuestion.Options
             .FirstOrDefault(option => option.IsCorrect);
 
-        if (correctOption is null)
+        if (correctOption is null || string.IsNullOrWhiteSpace(correctOption.OptionText))
         {
             throw new BusinessRuleException(
-                "Generated quiz question does not contain a correct option.",
-                "GENERATED_QUESTION_HAS_NO_CORRECT_OPTION");
+                "Generated quiz question does not contain a correct answer.",
+                "QUIZ_QUESTION_CORRECT_ANSWER_MISSING");
         }
 
-        return correctOption.OptionText;
+        return correctOption.OptionText.Trim();
     }
 
     /// <summary>
@@ -185,50 +210,31 @@ public static class QuizMapper
                 "QUESTION_TYPE_REQUIRED");
         }
 
+        var normalizedQuestionType = questionType.Trim();
+
+        // Eğer string doğrudan enum ismiyle eşleşiyorsa onu kullanırız.
+        // Örnek:
+        // - MultipleChoice
+        // - Writing
+        // - TranslateToTargetLanguage
         if (Enum.TryParse<QuestionType>(
-                questionType.Trim(),
+                normalizedQuestionType,
                 ignoreCase: true,
                 out var parsedQuestionType))
         {
             return parsedQuestionType;
         }
 
-        if (string.Equals(
-                questionType.Trim(),
-                "MultipleChoiceTranslation",
-                StringComparison.OrdinalIgnoreCase))
+        // Generator özel isimlerini domain enum değerlerine burada çeviriyoruz.
+        return normalizedQuestionType switch
         {
-            var multipleChoiceAliases = new[]
-            {
-                "MultipleChoice",
-                "Test",
-                "Translation",
-                "WordTranslation",
-                "WordToMeaning",
-                "MeaningSelection",
-                "MultipleChoiceMeaning",
-                "MultipleChoiceWordTranslation"
-            };
+            "MultipleChoiceTranslation" => QuestionType.MultipleChoice,
+            "WrittenTranslation" => QuestionType.TranslateToTargetLanguage,
 
-            foreach (var alias in multipleChoiceAliases)
-            {
-                if (Enum.TryParse<QuestionType>(
-                        alias,
-                        ignoreCase: true,
-                        out var aliasQuestionType))
-                {
-                    return aliasQuestionType;
-                }
-            }
-        }
-
-        var supportedQuestionTypes = string.Join(
-            ", ",
-            Enum.GetNames<QuestionType>());
-
-        throw new BusinessRuleException(
-            $"Question type '{questionType}' is not supported. Supported domain question types: {supportedQuestionTypes}.",
-            "QUESTION_TYPE_NOT_SUPPORTED");
+            _ => throw new BusinessRuleException(
+                $"Question type '{questionType}' is not supported.",
+                "QUESTION_TYPE_NOT_SUPPORTED")
+        };
     }
 
     /// <summary>
@@ -238,14 +244,13 @@ public static class QuizMapper
         QuizAnswer quizAnswer,
         QuizSession quizSession,
         QuizQuestion quizQuestion,
-        QuizOption selectedOption,
+        QuizOption? selectedOption,
         QuizAnswerEvaluationResult evaluationResult,
         LearningProgressUpdateResult progressUpdateResult)
     {
         ArgumentNullException.ThrowIfNull(quizAnswer);
         ArgumentNullException.ThrowIfNull(quizSession);
         ArgumentNullException.ThrowIfNull(quizQuestion);
-        ArgumentNullException.ThrowIfNull(selectedOption);
         ArgumentNullException.ThrowIfNull(evaluationResult);
         ArgumentNullException.ThrowIfNull(progressUpdateResult);
 
@@ -254,9 +259,18 @@ public static class QuizMapper
             QuizAnswerId = quizAnswer.Id,
             QuizSessionId = quizSession.Id,
             QuizQuestionId = quizQuestion.Id,
-            SelectedQuizOptionId = selectedOption.Id,
+
+            SelectedQuizOptionId = selectedOption?.Id ?? evaluationResult.SelectedQuizOptionId,
+
             IsCorrect = evaluationResult.IsCorrect,
+            AnswerResult = evaluationResult.AnswerResult.ToString(),
+            IsPartiallyCorrect = evaluationResult.IsPartiallyCorrect,
+
             SelectedOptionText = evaluationResult.SelectedOptionText,
+            UserAnswerText = string.IsNullOrWhiteSpace(evaluationResult.UserAnswerText)
+        ? null
+        : evaluationResult.UserAnswerText,
+
             CorrectAnswerText = evaluationResult.CorrectAnswerText,
             QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds,
             AnsweredAt = quizAnswer.AnsweredAt,

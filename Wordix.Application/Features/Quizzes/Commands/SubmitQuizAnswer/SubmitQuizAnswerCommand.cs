@@ -4,57 +4,25 @@ using Wordix.Application.Features.Quizzes.Dtos.Responses;
 namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 
 /// <summary>
-/// Kullanıcının quiz sorusuna cevap gönderme işlemini temsil eden command modelidir.
+/// Kullanıcının quiz sorusuna cevap verme use-case command modelidir.
 /// 
-/// Neden command?
-/// - QuizAnswer kaydı oluşturulur.
-/// - UserLearningProgress güncellenir.
-/// - LearningProgressHistory kaydı oluşturulur.
-/// - NextReviewDate hesaplanır.
+/// Test quiz:
+/// - SelectedQuizOptionId dolu gelir.
+/// - QuizQuestionId opsiyoneldir.
+/// - UserAnswer genellikle null gelir.
 /// 
-/// Yani sistem durumunu değiştiren bir işlemdir.
-/// Bu yüzden CQRS açısından query değil command'dir.
+/// Writing quiz:
+/// - QuizQuestionId dolu gelir.
+/// - UserAnswer dolu gelir.
+/// - SelectedQuizOptionId null gelir.
+/// 
+/// Hangi alanın zorunlu olduğu quiz session tipine göre handler içinde kontrol edilir.
+/// Çünkü validator tek başına quiz tipini database'den bilemez.
 /// </summary>
-public sealed record SubmitQuizAnswerCommand : IRequest<SubmitQuizAnswerResponse>
-{
-    /// <summary>
-    /// Cevap verilen quiz session id değeridir.
-    /// 
-    /// Bu değer route üzerinden gelir:
-    /// POST /api/quizzes/{quizSessionId}/answers
-    /// </summary>
-    public Guid QuizSessionId { get; init; }
-
-    /// <summary>
-    /// Kullanıcının seçtiği quiz option id değeridir.
-    /// 
-    /// Bu değer request body üzerinden gelir.
-    /// </summary>
-    public Guid SelectedQuizOptionId { get; init; }
-
-    /// <summary>
-    /// Kullanıcının bu spesifik soruya cevaplama süresidir.
-    /// 
-    /// Bu süre quiz session geneli değildir.
-    /// SelectedQuizOptionId üzerinden bulunacak QuizQuestion'a ait cevap süresidir.
-    /// 
-    /// Opsiyoneldir.
-    /// </summary>
-    public int? QuestionResponseTimeInMilliseconds { get; init; }
-
-    /// <summary>
-    /// Constructor.
-    /// 
-    /// Controller route parametresindeki quizSessionId ile body'deki selectedQuizOptionId
-    /// ve questionResponseTimeInMilliseconds değerlerini command'e aktaracak.
-    /// </summary>
-    public SubmitQuizAnswerCommand(
-        Guid quizSessionId,
-        Guid selectedQuizOptionId,
-        int? questionResponseTimeInMilliseconds)
-    {
-        QuizSessionId = quizSessionId;
-        SelectedQuizOptionId = selectedQuizOptionId;
-        QuestionResponseTimeInMilliseconds = questionResponseTimeInMilliseconds;
-    }
-}
+public sealed record SubmitQuizAnswerCommand(
+    Guid QuizSessionId,
+    Guid? QuizQuestionId,
+    Guid? SelectedQuizOptionId,
+    string? UserAnswer,
+    int? QuestionResponseTimeInMilliseconds)
+    : IRequest<SubmitQuizAnswerResponse>;

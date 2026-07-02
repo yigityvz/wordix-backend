@@ -32,6 +32,14 @@ public sealed class GeneratedQuizQuestion
     /// </summary>
     public Guid? PhraseId { get; init; }
 
+
+    /// <summary>
+    /// Eğer soru Sentence üzerinden üretildiyse Sentence id değeridir.
+    /// Word/Phrase sorularında null olur.
+    /// </summary>
+    public Guid? SentenceId { get; init; }
+
+
     /// <summary>
     /// Sorunun üretildiği içerik tipidir.
     /// 
@@ -57,8 +65,11 @@ public sealed class GeneratedQuizQuestion
     /// <summary>
     /// Soru tipi.
     /// 
-    /// İlk prototipte:
+    /// Test quiz için:
     /// MultipleChoiceTranslation
+    /// 
+    /// Writing quiz için:
+    /// TranslateToTargetLanguage
     /// </summary>
     public string QuestionType { get; init; } = "MultipleChoiceTranslation";
 
@@ -69,6 +80,20 @@ public sealed class GeneratedQuizQuestion
     /// API response'ta doğru cevap olarak dönülmez.
     /// </summary>
     public Guid CorrectMeaningId { get; init; }
+
+
+    /// <summary>
+    /// Doğru cevap metnidir.
+    /// 
+    /// Multiple choice quizde doğru option metniyle aynı değerdir.
+    /// Writing quizde kullanıcının yazacağı beklenen cevaptır.
+    /// 
+    /// Örnek:
+    /// - başarmak
+    /// - vazgeçmek
+    /// - İngilizcemi geliştirmek istiyorum.
+    /// </summary>
+    public string CorrectAnswerText { get; init; } = string.Empty;
 
     /// <summary>
     /// Üretilen seçeneklerdir.

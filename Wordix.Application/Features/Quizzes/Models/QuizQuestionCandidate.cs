@@ -42,6 +42,17 @@ public sealed class QuizQuestionCandidate
     /// </summary>
     public Guid? PhraseId { get; init; }
 
+
+    /// <summary>
+    /// Eğer aday Sentence üzerinden geliyorsa Sentence id değeridir.
+    /// Word/Phrase adaylarında null olur.
+    /// 
+    /// Faz 21 Writing Quiz için önemlidir.
+    /// Çünkü Sentence writing sorularında doğru cevap Meaning tablosundan değil,
+    /// SentenceTranslation tablosundan gelir.
+    /// </summary>
+    public Guid? SentenceId { get; init; }
+
     /// <summary>
     /// Adayın içerik tipidir.
     /// 
@@ -59,11 +70,17 @@ public sealed class QuizQuestionCandidate
     /// 
     /// Phrase için:
     /// give up
+    /// 
+    /// Sentence için:
+    /// I want to improve my English
     /// </summary>
     public string QuestionText { get; init; } = string.Empty;
 
     /// <summary>
     /// Doğru cevabın Meaning id değeridir.
+    /// 
+    /// Word/Phrase multiple choice sorularında dolu olur.
+    /// Sentence writing sorularında doğru cevap SentenceTranslation üzerinden geldiği için boş Guid kalabilir.
     /// </summary>
     public Guid CorrectMeaningId { get; init; }
 

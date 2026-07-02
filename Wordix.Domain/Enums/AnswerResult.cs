@@ -17,7 +17,10 @@ public enum AnswerResult
 
     /// <summary>
     /// Cevap kısmen doğru.
-    /// Özellikle writing quizlerde toleranslı değerlendirme için kullanılabilir.
+    /// 
+    /// Faz 21 Writing Quiz kararında aktif kullanılmaz.
+    /// Çünkü writing quizde eksik/kısmi cevap yanlış kabul edilir.
+    /// Future-ready olarak tutulur; ileride farklı quiz tiplerinde kullanılabilir.
     /// </summary>
     PartiallyCorrect = 3,
 

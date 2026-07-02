@@ -127,43 +127,37 @@ public sealed class SubmitQuizAnswerCommandHandler
         // 3. Quiz session cevap kabul edebilir durumda mı?
         EnsureQuizSessionCanAcceptAnswer(quizSession);
 
-        // 4. Kullanıcının seçtiği option'ı buluyoruz.
-        var selectedOption = await _quizOptionRepository.FirstOrDefaultAsync(
-            option => option.Id == request.SelectedQuizOptionId,
+        // 4. Quiz tipine göre cevap hedefini çözüyoruz.
+        //
+        // Test quiz:
+        // - selectedQuizOptionId üzerinden QuizOption bulunur.
+        // - QuizQuestion option üzerinden çözülür.
+        //
+        // Writing quiz:
+        // - quizQuestionId üzerinden QuizQuestion bulunur.
+        // - Option olmadığı için selectedOption null kalır.
+        var selectedOption = await ResolveSelectedOptionForAnswerAsync(
+            quizSession,
+            request,
             cancellationToken);
 
-        if (selectedOption is null)
-        {
-            throw new NotFoundException(
-                "Quiz option",
-                request.SelectedQuizOptionId);
-        }
-
-        // 5. Option'ın ait olduğu question'ı buluyoruz.
-        var quizQuestion = await _quizQuestionRepository.FirstOrDefaultAsync(
-            question => question.Id == selectedOption.QuizQuestionId,
+        var quizQuestion = await ResolveQuizQuestionForAnswerAsync(
+            quizSession,
+            request,
+            selectedOption,
             cancellationToken);
 
-        if (quizQuestion is null)
-        {
-            throw new NotFoundException(
-                "Quiz question",
-                selectedOption.QuizQuestionId);
-        }
-
-        // 6. Question route'taki quiz session'a mı ait?
-        // Bu kontrol, başka session'daki option id'nin bu session'a gönderilmesini engeller.
+        // 5. Question route'taki quiz session'a mı ait?
+        // Bu kontrol, başka session'daki question/option id'nin bu session'a gönderilmesini engeller.
         if (quizQuestion.QuizSessionId != quizSession.Id)
         {
             throw new BusinessRuleException(
-                "Selected option does not belong to the specified quiz session.",
-                "SELECTED_OPTION_DOES_NOT_BELONG_TO_QUIZ_SESSION");
+                "Answered question does not belong to the specified quiz session.",
+                "ANSWERED_QUESTION_DOES_NOT_BELONG_TO_QUIZ_SESSION");
         }
 
-        // 7. Aynı soru daha önce cevaplanmış mı?
+        // 6. Aynı soru daha önce cevaplanmış mı?
         // İlk prototipte her QuizQuestion sadece bir kez cevaplanabilir.
-        //
-        // Yeni mimaride bu kontrol UserProfileId ile değil KeycloakUserId ile yapılır.
         var alreadyAnswered = await _quizRepository.HasAnswerForQuestionAsync(
             quizQuestion.Id,
             keycloakUserId,
@@ -176,41 +170,43 @@ public sealed class SubmitQuizAnswerCommandHandler
                 "QUIZ_QUESTION_ALREADY_ANSWERED");
         }
 
-        // 8. Cevap değerlendirme request'i hazırlanır.
+        // 7. Cevap değerlendirme request'i hazırlanır.
         var evaluationRequest = new QuizAnswerEvaluationRequest
         {
             QuizSessionId = quizSession.Id,
             QuizQuestionId = quizQuestion.Id,
-            SelectedQuizOptionId = selectedOption.Id,
-            SelectedOptionText = selectedOption.OptionText,
-            SelectedOptionIsCorrect = selectedOption.IsCorrect,
+            QuizType = quizSession.QuizType,
+            QuestionType = quizQuestion.QuestionType,
+
+            SelectedQuizOptionId = selectedOption?.Id,
+            SelectedOptionText = selectedOption?.OptionText,
+            SelectedOptionIsCorrect = selectedOption?.IsCorrect,
+
+            UserAnswerText = request.UserAnswer,
             CorrectAnswerText = quizQuestion.CorrectAnswer,
             QuestionResponseTimeInMilliseconds = request.QuestionResponseTimeInMilliseconds
         };
 
-        // 9. Doğru/yanlış değerlendirmesi ayrı servisle yapılır.
+        // 8. Cevap değerlendirmesi ayrı servisle yapılır.
         var evaluationResult = _quizAnswerEvaluator.Evaluate(evaluationRequest);
 
-        // 10. QuizAnswer entity oluşturulur.
-        // Multiple choice quiz için:
+        // 9. QuizAnswer entity oluşturulur.
+        //
+        // Test quiz:
         // - SelectedQuizOptionId doludur.
         // - UserAnswer olarak seçilen option text saklanır.
-        // - CorrectAnswer quiz question üzerindeki doğru cevap metnidir.
-        // - AnswerResult backend tarafından hesaplanır.
         //
-        // Dikkat:
-        // Burada correctAnswer alanına doğru cevap metnini,
-        // userAnswer alanına kullanıcının seçtiği option metnini yazıyoruz.
-        var answerResult = ResolveAnswerResult(evaluationResult.IsCorrect);
-
+        // Writing quiz:
+        // - SelectedQuizOptionId null olur.
+        // - UserAnswer olarak kullanıcının yazdığı cevap saklanır.
         var quizAnswer = new QuizAnswer(
             quizQuestion.Id,
             keycloakUserId,
             evaluationResult.CorrectAnswerText,
-            answerResult,
+            evaluationResult.AnswerResult,
             evaluationResult.QuestionResponseTimeInMilliseconds ?? 0,
-            selectedOption.Id,
-            evaluationResult.SelectedOptionText);
+            evaluationResult.SelectedQuizOptionId,
+            evaluationResult.SubmittedAnswerText);
 
         await _quizAnswerRepository.AddAsync(
             quizAnswer,
@@ -320,6 +316,137 @@ public sealed class SubmitQuizAnswerCommandHandler
             progressUpdateResult: progressUpdateResult);
     }
 
+
+
+    /// <summary>
+    /// Quiz tipine göre selected option bilgisini çözer.
+    /// 
+    /// Test quiz:
+    /// - SelectedQuizOptionId zorunludur.
+    /// 
+    /// Writing quiz:
+    /// - Option kullanılmaz, null döner.
+    /// </summary>
+    private async Task<QuizOption?> ResolveSelectedOptionForAnswerAsync(
+        QuizSession quizSession,
+        SubmitQuizAnswerCommand request,
+        CancellationToken cancellationToken)
+    {
+        if (quizSession.QuizType == QuizType.Writing)
+        {
+            if (request.SelectedQuizOptionId.HasValue &&
+                request.SelectedQuizOptionId.Value != Guid.Empty)
+            {
+                throw new BusinessRuleException(
+                    "Selected quiz option id is not allowed for writing quiz answers.",
+                    "SELECTED_OPTION_NOT_ALLOWED_FOR_WRITING_QUIZ");
+            }
+
+            return null;
+        }
+
+        if (quizSession.QuizType != QuizType.Test)
+        {
+            throw new BusinessRuleException(
+                "Quiz type is not supported for answer submission.",
+                "QUIZ_TYPE_NOT_SUPPORTED_FOR_ANSWER_SUBMISSION");
+        }
+
+        if (!request.SelectedQuizOptionId.HasValue || request.SelectedQuizOptionId.Value == Guid.Empty)
+        {
+            throw new BusinessRuleException(
+                "Selected quiz option id is required for test quiz answers.",
+                "SELECTED_QUIZ_OPTION_ID_REQUIRED_FOR_TEST_QUIZ");
+        }
+
+        var selectedOption = await _quizOptionRepository.FirstOrDefaultAsync(
+            option => option.Id == request.SelectedQuizOptionId.Value,
+            cancellationToken);
+
+        if (selectedOption is null)
+        {
+            throw new NotFoundException(
+                "Quiz option",
+                request.SelectedQuizOptionId.Value);
+        }
+
+        return selectedOption;
+    }
+
+    /// <summary>
+    /// Quiz tipine göre cevaplanan question bilgisini çözer.
+    /// 
+    /// Test quiz:
+    /// - Question, selected option üzerinden bulunur.
+    /// 
+    /// Writing quiz:
+    /// - Question, request.QuizQuestionId üzerinden bulunur.
+    /// </summary>
+    private async Task<QuizQuestion> ResolveQuizQuestionForAnswerAsync(
+        QuizSession quizSession,
+        SubmitQuizAnswerCommand request,
+        QuizOption? selectedOption,
+        CancellationToken cancellationToken)
+    {
+        if (quizSession.QuizType == QuizType.Test)
+        {
+            if (selectedOption is null)
+            {
+                throw new BusinessRuleException(
+                    "Selected option is required to resolve test quiz question.",
+                    "SELECTED_OPTION_REQUIRED_TO_RESOLVE_TEST_QUESTION");
+            }
+
+            var quizQuestion = await _quizQuestionRepository.FirstOrDefaultAsync(
+                question => question.Id == selectedOption.QuizQuestionId,
+                cancellationToken);
+
+            if (quizQuestion is null)
+            {
+                throw new NotFoundException(
+                    "Quiz question",
+                    selectedOption.QuizQuestionId);
+            }
+
+            return quizQuestion;
+        }
+
+        if (quizSession.QuizType == QuizType.Writing)
+        {
+            if (!request.QuizQuestionId.HasValue || request.QuizQuestionId.Value == Guid.Empty)
+            {
+                throw new BusinessRuleException(
+                    "Quiz question id is required for writing quiz answers.",
+                    "QUIZ_QUESTION_ID_REQUIRED_FOR_WRITING_QUIZ");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.UserAnswer))
+            {
+                throw new BusinessRuleException(
+                    "User answer is required for writing quiz answers.",
+                    "USER_ANSWER_REQUIRED_FOR_WRITING_QUIZ");
+            }
+
+            var quizQuestion = await _quizQuestionRepository.FirstOrDefaultAsync(
+                question => question.Id == request.QuizQuestionId.Value,
+                cancellationToken);
+
+            if (quizQuestion is null)
+            {
+                throw new NotFoundException(
+                    "Quiz question",
+                    request.QuizQuestionId.Value);
+            }
+
+            return quizQuestion;
+        }
+
+        throw new BusinessRuleException(
+            "Quiz type is not supported for resolving answered question.",
+            "QUIZ_TYPE_NOT_SUPPORTED_FOR_QUESTION_RESOLUTION");
+    }
+
+
     /// <summary>
     /// Quiz session cevap kabul edebilir durumda mı kontrol eder.
     /// 
@@ -346,38 +473,6 @@ public sealed class SubmitQuizAnswerCommandHandler
         }
     }
 
-    /// <summary>
-    /// Boolean doğru/yanlış bilgisini domain AnswerResult enum değerine çevirir.
-    /// 
-    /// Enum değerleri projede Correct/Wrong, Correct/Incorrect gibi farklı isimlenmiş olabilir.
-    /// Bu yüzden alias tabanlı güvenli resolver kullanıyoruz.
-    /// </summary>
-    private static AnswerResult ResolveAnswerResult(
-        bool isCorrect)
-    {
-        var aliases = isCorrect
-            ? ["Correct", "Right", "Success"]
-            : new[] { "Wrong", "Incorrect", "False", "Failed" };
-
-        foreach (var alias in aliases)
-        {
-            if (Enum.TryParse<AnswerResult>(
-                    alias,
-                    ignoreCase: true,
-                    out var parsedResult))
-            {
-                return parsedResult;
-            }
-        }
-
-        var supportedValues = string.Join(
-            ", ",
-            Enum.GetNames<AnswerResult>());
-
-        throw new BusinessRuleException(
-            $"Could not resolve answer result. Supported answer results: {supportedValues}.",
-            "ANSWER_RESULT_NOT_SUPPORTED");
-    }
 
     /// <summary>
     /// LearningProgressUpdater tarafından hesaplanan yeni state'i UserLearningProgress entity'sine uygular.

@@ -91,11 +91,13 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
                 LearningItemId = questionCandidate.LearningItemId,
                 WordId = questionCandidate.WordId,
                 PhraseId = questionCandidate.PhraseId,
+                SentenceId = questionCandidate.SentenceId,
                 ItemType = questionCandidate.ItemType,
                 QuestionText = BuildQuestionText(questionCandidate),
                 QuestionOrder = generatedQuestions.Count + 1,
                 QuestionType = QuestionType,
                 CorrectMeaningId = questionCandidate.CorrectMeaningId,
+                CorrectAnswerText = questionCandidate.CorrectAnswerText.Trim(),
                 Options = options
             });
         }

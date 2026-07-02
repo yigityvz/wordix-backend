@@ -52,6 +52,13 @@ public sealed class QuizQuestionResponse
 
 
     /// <summary>
+    /// Eğer soru Sentence üzerinden üretildiyse Sentence id değeridir.
+    /// Word/Phrase sorularında null olur.
+    /// </summary>
+    public Guid? SentenceId { get; init; }
+
+
+    /// <summary>
     /// Sorunun içerik tipi.
     /// 
     /// İlk prototipte:

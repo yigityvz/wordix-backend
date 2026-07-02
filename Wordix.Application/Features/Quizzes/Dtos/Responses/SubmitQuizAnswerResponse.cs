@@ -31,7 +31,7 @@ public sealed class SubmitQuizAnswerResponse
     /// <summary>
     /// Kullanıcının seçtiği quiz option id değeridir.
     /// </summary>
-    public Guid SelectedQuizOptionId { get; init; }
+    public Guid? SelectedQuizOptionId { get; init; }
 
     /// <summary>
     /// Kullanıcının verdiği cevap doğru mu?
@@ -45,8 +45,31 @@ public sealed class SubmitQuizAnswerResponse
     /// </summary>
     public bool IsCorrect { get; init; }
 
+
+    /// <summary>
+    /// Cevabın domain sonucudur.
+    /// 
+    /// Örnek:
+    /// Correct, Incorrect, PartiallyCorrect, Skipped.
+    /// </summary>
+    public string AnswerResult { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Cevap kısmen doğru mu?
+    /// Writing quiz için kullanışlıdır.
+    /// </summary>
+    public bool IsPartiallyCorrect { get; init; }
+
+    /// <summary>
+    /// Kullanıcının yazdığı cevap metnidir.
+    /// Writing quiz için doludur.
+    /// </summary>
+    public string? UserAnswerText { get; init; }
+
     /// <summary>
     /// Kullanıcının seçtiği option text değeridir.
+    /// Test quiz için doludur.
+    /// Writing quizde boş olabilir.
     /// </summary>
     public string SelectedOptionText { get; init; } = string.Empty;
 

@@ -51,13 +51,15 @@ public sealed class StartQuizCommandHandler
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
     private readonly IRepository<Phrase> _phraseRepository;
+    private readonly IRepository<Sentence> _sentenceRepository;
+    private readonly IRepository<SentenceTranslation> _sentenceTranslationRepository;
     private readonly IRepository<Meaning> _meaningRepository;
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
     private readonly IRepository<QuizSession> _quizSessionRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
-    private readonly IQuizQuestionGenerator _quizQuestionGenerator;
+    private readonly IQuizQuestionGeneratorResolver _quizQuestionGeneratorResolver;
     private readonly IUnitOfWork _unitOfWork;
 
     /// <summary>
@@ -77,13 +79,15 @@ public sealed class StartQuizCommandHandler
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
         IRepository<Phrase> phraseRepository,
+        IRepository<Sentence> sentenceRepository,
+        IRepository<SentenceTranslation> sentenceTranslationRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<Deck> deckRepository,
         IRepository<DeckItem> deckItemRepository,
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
-        IQuizQuestionGenerator quizQuestionGenerator,
+        IQuizQuestionGeneratorResolver quizQuestionGeneratorResolver,
         IUnitOfWork unitOfWork)
     {
         _currentUserService = currentUserService;
@@ -92,13 +96,15 @@ public sealed class StartQuizCommandHandler
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
         _phraseRepository = phraseRepository;
+        _sentenceRepository = sentenceRepository;
+        _sentenceTranslationRepository = sentenceTranslationRepository;
         _meaningRepository = meaningRepository;
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
         _quizSessionRepository = quizSessionRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
-        _quizQuestionGenerator = quizQuestionGenerator;
+        _quizQuestionGeneratorResolver = quizQuestionGeneratorResolver;
         _unitOfWork = unitOfWork;
     }
 
@@ -145,41 +151,71 @@ public sealed class StartQuizCommandHandler
         }
 
         // 3. Dictionary itemlarından quiz üretmeye uygun candidate listesi hazırlıyoruz.
+        //
+        // Faz 21D itibarıyla bu candidate listesi Word/Phrase tabanlıdır.
+        // Sentence writing desteği bir sonraki alt adımda kontrollü eklenecektir.
         var candidates = await BuildQuestionCandidatesAsync(
             userLearningItems,
+            quizType,
             quizContentMode,
             cancellationToken);
 
-        // 4 seçenekli test için minimum 4 farklı aday anlam gerekir.
-        if (candidates.Count < OptionCountPerQuestion)
+        // Quiz tipine göre minimum aday sayısı değişir.
+        //
+        // Test quiz:
+        // - 4 seçenekli yapı nedeniyle en az 4 uygun item gerekir.
+        //
+        // Writing quiz:
+        // - Seçenek üretmediği için en az 1 uygun item yeterlidir.
+        var minimumCandidateCount = ResolveMinimumCandidateCount(quizType);
+
+        if (candidates.Count < minimumCandidateCount)
         {
             throw new BusinessRuleException(
-                $"At least {OptionCountPerQuestion} saved learning items with meanings are required to start a multiple choice quiz.");
+                BuildNotEnoughQuizItemsMessage(quizType),
+                "NOT_ENOUGH_QUIZ_ITEMS");
         }
 
-        // Kullanıcı dictionary'sinde 5 uygun kelime varsa ve 10 soru isterse,
-        // ilk prototipte üretilebilir maksimum kadar soru oluşturuyoruz.
+        // Kullanıcı 10 soru isteyebilir ama elimizde 3 uygun item varsa
+        // üretilebilir maksimum kadar soru oluştururuz.
         var actualQuestionCount = Math.Min(
             request.QuestionCount,
             candidates.Count);
+
+        // QuizType'a göre doğru generator'ı resolver üzerinden seçiyoruz.
+        //
+        // Test:
+        // - MultipleChoiceTranslationQuestionGenerator
+        //
+        // Writing:
+        // - WrittenTranslationQuestionGenerator
+        //
+        // Böylece handler tek bir generator implementation'ına bağımlı kalmaz.
+        var quizQuestionGenerator = _quizQuestionGeneratorResolver.Resolve(quizType);
 
         // 4. Generator request modelini hazırlıyoruz.
         var generationRequest = new QuizQuestionGenerationRequest
         {
             RequestedQuestionCount = actualQuestionCount,
-            OptionCountPerQuestion = OptionCountPerQuestion,
+
+            // Test quiz için 4 seçenek gerekir.
+            // Writing quiz seçenek üretmediği için bu değer generator tarafından kullanılmaz.
+            OptionCountPerQuestion = quizType == QuizType.Test
+                ? OptionCountPerQuestion
+                : 0,
+
             Candidates = candidates
         };
 
-        // 5. Soru/seçenek planını generator'a ürettiriyoruz.
-        var generationResult = await _quizQuestionGenerator.GenerateAsync(
+        // 5. Soru/seçenek planını seçilen generator'a ürettiriyoruz.
+        var generationResult = await quizQuestionGenerator.GenerateAsync(
             generationRequest,
             cancellationToken);
 
         if (!generationResult.HasQuestions)
         {
             throw new BusinessRuleException(
-                "Quiz questions could not be generated from your dictionary items.",
+                BuildNotEnoughQuizItemsMessage(quizType),
                 "QUIZ_QUESTIONS_COULD_NOT_BE_GENERATED");
         }
 
@@ -281,6 +317,52 @@ public sealed class StartQuizCommandHandler
             questionResponses: createdQuestionResponses);
     }
 
+
+    /// <summary>
+    /// Quiz tipine göre minimum gerekli candidate sayısını döner.
+    /// 
+    /// Test quiz:
+    /// - 4 seçenekli olduğu için en az 4 uygun item gerekir.
+    /// 
+    /// Writing quiz:
+    /// - Seçenek olmadığı için en az 1 uygun item yeterlidir.
+    /// </summary>
+    private static int ResolveMinimumCandidateCount(
+        QuizType quizType)
+    {
+        return quizType switch
+        {
+            QuizType.Test => OptionCountPerQuestion,
+            QuizType.Writing => 1,
+
+            QuizType.Mixed => throw new BusinessRuleException(
+                "Mixed quiz type is not supported yet.",
+                "QUIZ_TYPE_NOT_SUPPORTED"),
+
+            _ => throw new BusinessRuleException(
+                "Quiz type is not supported.",
+                "QUIZ_TYPE_NOT_SUPPORTED")
+        };
+    }
+
+    /// <summary>
+    /// Soru üretilemediğinde kullanıcıya quiz tipine uygun hata mesajı döner.
+    /// </summary>
+    private static string BuildNotEnoughQuizItemsMessage(
+        QuizType quizType)
+    {
+        return quizType switch
+        {
+            QuizType.Test =>
+                "At least 4 saved learning items with meanings are required to start a multiple choice quiz.",
+
+            QuizType.Writing =>
+                "At least 1 saved learning item with a valid answer is required to start a writing quiz.",
+
+            _ =>
+                "There are not enough learning items to start this quiz."
+        };
+    }
 
 
     /// <summary>
@@ -423,16 +505,19 @@ public sealed class StartQuizCommandHandler
     /// SentencesOnly şimdilik Faz 19'a bırakılmıştır.
     /// </summary>
     private async Task<IReadOnlyCollection<QuizQuestionCandidate>> BuildQuestionCandidatesAsync(
-        IReadOnlyCollection<UserLearningItem> userLearningItems,
-        QuizContentMode quizContentMode,
-        CancellationToken cancellationToken)
+            IReadOnlyCollection<UserLearningItem> userLearningItems,
+            QuizType quizType,
+            QuizContentMode quizContentMode,
+            CancellationToken cancellationToken)
     {
         var learningItemIds = userLearningItems
             .Select(item => item.LearningItemId)
             .Distinct()
             .ToArray();
 
-        var allowedItemTypes = ResolveAllowedLearningItemTypes(quizContentMode);
+        var allowedItemTypes = ResolveAllowedLearningItemTypes(
+            quizType,
+            quizContentMode);
 
         var learningItems = await _learningItemRepository.ListAsync(
             item => learningItemIds.Contains(item.Id)
@@ -467,6 +552,45 @@ public sealed class StartQuizCommandHandler
 
         var phraseLookup = phrases.ToDictionary(phrase => phrase.LearningItemId);
 
+        // Sentence writing quiz için sentence detaylarını çekiyoruz.
+        //
+        // Önemli:
+        // Sentence entity'de LearningItemId nullable olabilir.
+        // Çünkü her sentence quiz/review item olmak zorunda değildir.
+        // Ancak quiz adayı olabilmesi için LearningItemId dolu olmalıdır.
+        var sentences = await _sentenceRepository.ListAsync(
+            sentence =>
+                sentence.LearningItemId.HasValue &&
+                filteredLearningItemIds.Contains(sentence.LearningItemId.Value),
+            cancellationToken);
+
+        var sentenceLookup = sentences
+            .Where(sentence => sentence.LearningItemId.HasValue)
+            .GroupBy(sentence => sentence.LearningItemId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First());
+
+
+        // Sentence sorularının doğru cevabı Meaning tablosundan değil,
+        // SentenceTranslation tablosundan gelir.
+        var sentenceIds = sentences
+            .Select(sentence => sentence.Id)
+            .Distinct()
+            .ToArray();
+
+        var sentenceTranslations = await _sentenceTranslationRepository.ListAsync(
+            translation => sentenceIds.Contains(translation.SourceSentenceId),
+            cancellationToken);
+
+        var translationsBySentenceId = sentenceTranslations
+            .Where(translation => !string.IsNullOrWhiteSpace(translation.TranslatedText))
+            .GroupBy(translation => translation.SourceSentenceId)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First());
+
+
         var meanings = await _meaningRepository.ListAsync(
             meaning => filteredLearningItemIds.Contains(meaning.LearningItemId),
             cancellationToken);
@@ -490,6 +614,54 @@ public sealed class StartQuizCommandHandler
                 continue;
             }
 
+            // Sentence writing soruları Meaning üzerinden değil,
+            // SentenceTranslation üzerinden doğru cevap üretir.
+            if (learningItem.ItemType == LearningItemType.Sentence)
+            {
+                if (!sentenceLookup.TryGetValue(
+                        learningItem.Id,
+                        out var sentence))
+                {
+                    continue;
+                }
+
+                if (!translationsBySentenceId.TryGetValue(
+                        sentence.Id,
+                        out var sentenceTranslation))
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(sentence.Text)
+                    || string.IsNullOrWhiteSpace(sentenceTranslation.TranslatedText))
+                {
+                    continue;
+                }
+
+                if (!userLearningItemsByLearningItemId.TryGetValue(
+                        learningItem.Id,
+                        out var sentenceUserLearningItem))
+                {
+                    continue;
+                }
+
+                candidates.Add(new QuizQuestionCandidate
+                {
+                    UserLearningItemId = sentenceUserLearningItem.Id,
+                    LearningItemId = learningItem.Id,
+                    WordId = null,
+                    PhraseId = null,
+                    SentenceId = sentence.Id,
+                    ItemType = learningItem.ItemType,
+                    QuestionText = sentence.Text,
+                    CorrectMeaningId = Guid.Empty,
+                    CorrectAnswerText = sentenceTranslation.TranslatedText,
+                    PartOfSpeech = null
+                });
+
+                continue;
+            }
+
             if (!meaningsByLearningItemId.TryGetValue(
                     learningItem.Id,
                     out var itemMeanings))
@@ -509,7 +681,8 @@ public sealed class StartQuizCommandHandler
             var contentText = ResolveCandidateContentText(
                 learningItem,
                 wordLookup,
-                phraseLookup);
+                phraseLookup,
+                sentenceLookup);
 
             if (string.IsNullOrWhiteSpace(contentText))
             {
@@ -538,26 +711,61 @@ public sealed class StartQuizCommandHandler
 
 
     /// <summary>
-    /// QuizContentMode değerine göre hangi LearningItem tiplerinin quizde kullanılabileceğini çözer.
+    /// QuizType + QuizContentMode değerlerine göre hangi LearningItem tiplerinin quizde kullanılabileceğini çözer.
+    /// 
+    /// Test quiz:
+    /// - Word/Phrase desteklenir.
+    /// - Sentence desteklenmez.
+    /// 
+    /// Writing quiz:
+    /// - Word/Phrase/Sentence desteklenir.
+    /// - Mixed seçilirse kullanıcının kaydettiği tüm uygun Word, Phrase ve Sentence itemları kullanılabilir.
     /// </summary>
     private static IReadOnlyCollection<LearningItemType> ResolveAllowedLearningItemTypes(
+        QuizType quizType,
         QuizContentMode quizContentMode)
     {
-        return quizContentMode switch
+        if (quizType == QuizType.Test)
         {
-            QuizContentMode.WordsOnly => new[] { LearningItemType.Word },
-            QuizContentMode.PhrasesOnly => new[] { LearningItemType.Phrase },
-            QuizContentMode.Mixed => new[] { LearningItemType.Word, LearningItemType.Phrase },
+            return quizContentMode switch
+            {
+                QuizContentMode.WordsOnly => new[] { LearningItemType.Word },
+                QuizContentMode.PhrasesOnly => new[] { LearningItemType.Phrase },
+                QuizContentMode.Mixed => new[] { LearningItemType.Word, LearningItemType.Phrase },
 
-            // Sentence quiz desteği Faz 19'a bırakıldı.
-            QuizContentMode.SentencesOnly => throw new BusinessRuleException(
-                "Sentence quiz mode is not supported in the current multiple choice quiz flow. It will be handled in the Writing Quiz phase.",
-                "QUIZ_CONTENT_MODE_NOT_SUPPORTED"),
+                QuizContentMode.SentencesOnly => throw new BusinessRuleException(
+                    "SentencesOnly content mode is supported only for Writing quiz type.",
+                    "SENTENCES_ONLY_REQUIRES_WRITING_QUIZ"),
 
-            _ => throw new BusinessRuleException(
-                "Quiz content mode is not supported.",
-                "QUIZ_CONTENT_MODE_NOT_SUPPORTED")
-        };
+                _ => throw new BusinessRuleException(
+                    "Quiz content mode is not supported.",
+                    "QUIZ_CONTENT_MODE_NOT_SUPPORTED")
+            };
+        }
+
+        if (quizType == QuizType.Writing)
+        {
+            return quizContentMode switch
+            {
+                QuizContentMode.WordsOnly => new[] { LearningItemType.Word },
+                QuizContentMode.PhrasesOnly => new[] { LearningItemType.Phrase },
+                QuizContentMode.SentencesOnly => new[] { LearningItemType.Sentence },
+                QuizContentMode.Mixed => new[]
+                {
+                LearningItemType.Word,
+                LearningItemType.Phrase,
+                LearningItemType.Sentence
+            },
+
+                _ => throw new BusinessRuleException(
+                    "Quiz content mode is not supported.",
+                    "QUIZ_CONTENT_MODE_NOT_SUPPORTED")
+            };
+        }
+
+        throw new BusinessRuleException(
+            "Quiz type is not supported for resolving quiz content mode.",
+            "QUIZ_TYPE_NOT_SUPPORTED");
     }
 
     /// <summary>
@@ -566,7 +774,8 @@ public sealed class StartQuizCommandHandler
     private static string ResolveCandidateContentText(
         LearningItem learningItem,
         IReadOnlyDictionary<Guid, Word> wordLookup,
-        IReadOnlyDictionary<Guid, Phrase> phraseLookup)
+        IReadOnlyDictionary<Guid, Phrase> phraseLookup,
+        IReadOnlyDictionary<Guid, Sentence> sentenceLookup)
     {
         return learningItem.ItemType switch
         {
@@ -575,6 +784,9 @@ public sealed class StartQuizCommandHandler
 
             LearningItemType.Phrase when phraseLookup.TryGetValue(learningItem.Id, out var phrase)
                 => phrase.Text,
+
+            LearningItemType.Sentence when sentenceLookup.TryGetValue(learningItem.Id, out var sentence)
+                => sentence.Text,
 
             _ => string.Empty
         };

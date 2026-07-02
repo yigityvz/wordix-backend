@@ -64,9 +64,19 @@ public static class ApplicationServiceRegistration
         services.AddSingleton<ITextNormalizer, TextNormalizer>();
         services.AddSingleton<ILookupClassifier, LookupClassifier>();
 
-        // Quiz feature servisleri:
-        // İlk prototipte multiple choice translation generator kullanılır.
-        services.AddScoped<IQuizQuestionGenerator, MultipleChoiceTranslationQuestionGenerator>();
+        // Quiz question generator registrations.
+        //
+        // Test Quiz:
+        // - MultipleChoiceTranslationQuestionGenerator
+        //
+        // Writing Quiz:
+        // - WrittenTranslationQuestionGenerator
+        //
+        // Handler doğrudan tek bir generator'a bağımlı olmaz.
+        // QuizType'a göre doğru generator'ı QuizQuestionGeneratorResolver seçer.
+        services.AddScoped<MultipleChoiceTranslationQuestionGenerator>();
+        services.AddScoped<WrittenTranslationQuestionGenerator>();
+        services.AddScoped<IQuizQuestionGeneratorResolver, QuizQuestionGeneratorResolver>();
 
         // Quiz answer evaluation:
         // Cevap değerlendirme logic'ini handler'dan ayrı tutar.

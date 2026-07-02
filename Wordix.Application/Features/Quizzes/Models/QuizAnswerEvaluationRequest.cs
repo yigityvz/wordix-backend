@@ -1,58 +1,49 @@
-﻿namespace Wordix.Application.Features.Quizzes.Models;
+﻿using Wordix.Domain.Enums;
+
+namespace Wordix.Application.Features.Quizzes.Models;
 
 /// <summary>
-/// Quiz cevabını değerlendirmek için QuizAnswerEvaluator'a gönderilecek request modelidir.
+/// Quiz cevabı değerlendirme servisine gönderilen request modelidir.
+/// 
+/// Test quiz:
+/// - SelectedQuizOptionId
+/// - SelectedOptionText
+/// - SelectedOptionIsCorrect
+/// 
+/// Writing quiz:
+/// - UserAnswerText
+/// - CorrectAnswerText
 /// 
 /// Bu model entity değildir.
-/// Handler, repository'den aldığı QuizOption ve QuizQuestion verilerini bu modele map eder.
-/// Evaluator ise sadece bu modele bakarak doğru/yanlış sonucunu üretir.
+/// Sadece evaluation sürecinde kullanılan application modelidir.
 /// </summary>
 public sealed class QuizAnswerEvaluationRequest
 {
-    /// <summary>
-    /// Cevap verilen quiz session id değeridir.
-    /// </summary>
     public Guid QuizSessionId { get; init; }
 
-    /// <summary>
-    /// Cevap verilen quiz question id değeridir.
-    /// </summary>
     public Guid QuizQuestionId { get; init; }
 
     /// <summary>
-    /// Kullanıcının seçtiği quiz option id değeridir.
+    /// Quiz session tipi.
+    /// Test veya Writing olabilir.
     /// </summary>
-    public Guid SelectedQuizOptionId { get; init; }
+    public QuizType QuizType { get; init; }
 
     /// <summary>
-    /// Kullanıcının seçtiği option text değeridir.
-    /// 
-    /// Örnek:
-    /// başarmak
+    /// Tekil soru tipi.
+    /// MultipleChoice veya TranslateToTargetLanguage olabilir.
     /// </summary>
-    public string SelectedOptionText { get; init; } = string.Empty;
+    public QuestionType QuestionType { get; init; }
 
-    /// <summary>
-    /// Seçilen option doğru cevap mı?
-    /// 
-    /// Bu değer QuizOption.IsCorrect alanından gelir.
-    /// Doğru/yanlış kararını client değil backend verir.
-    /// </summary>
-    public bool SelectedOptionIsCorrect { get; init; }
+    public Guid? SelectedQuizOptionId { get; init; }
 
-    /// <summary>
-    /// QuizQuestion üzerinde tutulan doğru cevap metnidir.
-    /// 
-    /// Örnek:
-    /// başarmak
-    /// </summary>
+    public string? SelectedOptionText { get; init; }
+
+    public bool? SelectedOptionIsCorrect { get; init; }
+
+    public string? UserAnswerText { get; init; }
+
     public string CorrectAnswerText { get; init; } = string.Empty;
 
-    /// <summary>
-    /// Kullanıcının bu spesifik soruya kaç milisaniyede cevap verdiğini belirtir.
-    /// 
-    /// Bu süre quiz session geneli değildir.
-    /// Sadece bu QuizQuestion için ölçülen cevap süresidir.
-    /// </summary>
     public int? QuestionResponseTimeInMilliseconds { get; init; }
 }

@@ -7,18 +7,18 @@ namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 /// 
 /// Bu validator ne yapar?
 /// - Route'tan gelen QuizSessionId değerinin boş olup olmadığını kontrol eder.
-/// - Body'den gelen SelectedQuizOptionId değerinin boş olup olmadığını kontrol eder.
+/// - Kullanıcının en az bir cevap payload'ı gönderip göndermediğini kontrol eder.
 /// - QuestionResponseTimeInMilliseconds değeri gönderilmişse makul aralıkta mı kontrol eder.
 /// 
 /// Bu validator ne yapmaz?
 /// - QuizSession gerçekten var mı kontrol etmez.
 /// - QuizSession current user'a ait mi kontrol etmez.
-/// - QuizOption gerçekten var mı kontrol etmez.
-/// - QuizOption bu session'daki bir question'a mı ait kontrol etmez.
-/// - Cevap doğru mu yanlış mı hesaplamaz.
+/// - Quiz'in Test mi Writing mi olduğunu database'den okumaz.
+/// - SelectedQuizOptionId bu session'a ait mi kontrol etmez.
+/// - UserAnswer doğru mu yanlış mı hesaplamaz.
 /// - Progress güncellemez.
 /// 
-/// Bunlar business/data kontrolleridir ve handler + servisler tarafında yapılacaktır.
+/// Bu kontroller handler + servisler tarafında yapılır.
 /// </summary>
 public sealed class SubmitQuizAnswerCommandValidator
     : AbstractValidator<SubmitQuizAnswerCommand>
@@ -36,15 +36,18 @@ public sealed class SubmitQuizAnswerCommandValidator
     /// 
     /// İlk prototipte tek soru için 10 dakika üstünü makul kabul etmiyoruz.
     /// 10 dakika = 600.000 ms
-    /// 
-    /// Bu süre quiz geneli değil, tek bir soru içindir.
-    /// İleride quiz tipine veya soru zorluğuna göre değiştirilebilir.
     /// </summary>
     private const int MaximumQuestionResponseTimeInMilliseconds = 600_000;
 
     /// <summary>
-    /// Validator kuralları constructor içinde tanımlanır.
+    /// Writing cevap için maksimum karakter sınırı.
+    /// 
+    /// Şimdilik 1000 karakter yeterli.
+    /// Sentence translation cevapları için de makul bir üst limittir.
+    /// İleride ayar haline getirilebilir.
     /// </summary>
+    private const int MaximumUserAnswerLength = 1_000;
+
     public SubmitQuizAnswerCommandValidator()
     {
         RuleFor(command => command.QuizSessionId)
@@ -52,10 +55,23 @@ public sealed class SubmitQuizAnswerCommandValidator
             .WithMessage("Quiz session id is required.")
             .WithErrorCode("QUIZ_SESSION_ID_REQUIRED");
 
-        RuleFor(command => command.SelectedQuizOptionId)
+        RuleFor(command => command)
+            .Must(ContainAnyAnswerPayload)
+            .WithMessage("Either selected quiz option id or user answer is required.")
+            .WithErrorCode("QUIZ_ANSWER_PAYLOAD_REQUIRED");
+
+        RuleFor(command => command.QuizQuestionId)
             .NotEmpty()
-            .WithMessage("Selected quiz option id is required.")
-            .WithErrorCode("SELECTED_QUIZ_OPTION_ID_REQUIRED");
+            .When(command =>
+                (!command.SelectedQuizOptionId.HasValue || command.SelectedQuizOptionId.Value == Guid.Empty)
+                && !string.IsNullOrWhiteSpace(command.UserAnswer))
+            .WithMessage("Quiz question id is required when answering with text.")
+            .WithErrorCode("QUIZ_QUESTION_ID_REQUIRED_FOR_WRITING_ANSWER");
+
+        RuleFor(command => command.UserAnswer)
+            .MaximumLength(MaximumUserAnswerLength)
+            .WithMessage($"User answer cannot exceed {MaximumUserAnswerLength} characters.")
+            .WithErrorCode("USER_ANSWER_TOO_LONG");
 
         RuleFor(command => command.QuestionResponseTimeInMilliseconds)
             .Must(BeNullOrInAllowedRange)
@@ -65,13 +81,38 @@ public sealed class SubmitQuizAnswerCommandValidator
     }
 
     /// <summary>
+    /// Kullanıcı en az bir cevap türü göndermelidir.
+    /// 
+    /// Test quiz için:
+    /// - SelectedQuizOptionId beklenir.
+    /// 
+    /// Writing quiz için:
+    /// - UserAnswer beklenir.
+    /// 
+    /// Hangi quiz tipinde hangisinin zorunlu olduğunu handler kontrol eder.
+    /// Validator burada sadece boş request'i engeller.
+    /// </summary>
+    private static bool ContainAnyAnswerPayload(
+        SubmitQuizAnswerCommand command)
+    {
+        var hasSelectedOption = command.SelectedQuizOptionId.HasValue
+            && command.SelectedQuizOptionId.Value != Guid.Empty;
+
+        var hasUserAnswer = !string.IsNullOrWhiteSpace(command.UserAnswer);
+
+
+        return hasSelectedOption || hasUserAnswer;
+    }
+
+    /// <summary>
     /// QuestionResponseTimeInMilliseconds alanı nullable olduğu için özel kontrol yapıyoruz.
     /// 
     /// Kurallar:
     /// - null olabilir.
     /// - null değilse 1 ile 600000 ms arasında olmalıdır.
     /// </summary>
-    private static bool BeNullOrInAllowedRange(int? questionResponseTimeInMilliseconds)
+    private static bool BeNullOrInAllowedRange(
+        int? questionResponseTimeInMilliseconds)
     {
         if (questionResponseTimeInMilliseconds is null)
         {
