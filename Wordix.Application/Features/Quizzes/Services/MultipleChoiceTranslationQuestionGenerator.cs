@@ -102,6 +102,9 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
                 QuestionType = QuestionType,
                 CorrectMeaningId = questionCandidate.CorrectMeaningId,
                 CorrectAnswerText = questionCandidate.CorrectAnswerText.Trim(),
+                IsSystemRecommended = questionCandidate.IsSystemRecommended,
+                RecommendationReason = questionCandidate.RecommendationReason,
+                DifficultyGroup = questionCandidate.DifficultyGroup,
                 Options = options
             });
         }

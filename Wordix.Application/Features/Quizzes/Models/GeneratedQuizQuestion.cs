@@ -57,6 +57,36 @@ public sealed class GeneratedQuizQuestion
     /// </summary>
     public string QuestionText { get; init; } = string.Empty;
 
+
+    /// <summary>
+    /// Bu generated question sistem önerisi candidate üzerinden mi üretildi?
+    /// 
+    /// QuizQuestion.IsSystemRecommended alanına yazılacak bilgidir.
+    /// </summary>
+    public bool IsSystemRecommended { get; init; }
+
+    /// <summary>
+    /// Sistem önerisi ise öneri sebebidir.
+    /// 
+    /// Response DTO'ya taşınır ve QuizRecommendationItem oluştururken kullanılır.
+    /// </summary>
+    public RecommendationReason? RecommendationReason { get; init; }
+
+    /// <summary>
+    /// İlgili recommendation item id değeridir.
+    /// 
+    /// Question ilk generate edildiğinde null olabilir.
+    /// QuizRecommendationItem oluşturulduktan sonra response tarafında doldurulabilir.
+    /// </summary>
+    public Guid? QuizRecommendationItemId { get; init; }
+
+    /// <summary>
+    /// Generated question'ın geldiği candidate'ın zorluk grubudur.
+    /// 
+    /// Sistem önerisi kayıtlarında snapshot olarak kullanılabilir.
+    /// </summary>
+    public DifficultyGroup DifficultyGroup { get; init; } = DifficultyGroup.Unknown;
+
     /// <summary>
     /// Soru sırasıdır.
     /// </summary>

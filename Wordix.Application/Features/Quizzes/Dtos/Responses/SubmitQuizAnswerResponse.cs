@@ -140,4 +140,48 @@ public sealed class SubmitQuizAnswerResponse
     /// İleride spaced repetition algoritması gelişebilir.
     /// </summary>
     public DateTimeOffset? NextReviewDate { get; init; }
+
+
+    /// <summary>
+    /// Bu cevap sonucunda UserLearningProgress güncellendi mi?
+    /// 
+    /// Normal dictionary/deck sorularında true olur.
+    /// Sistem önerisi item kullanıcının dictionary'sinde değilse progress kaydı henüz olmadığı için false olur.
+    /// </summary>
+    public bool ProgressUpdated { get; init; }
+
+
+    /// <summary>
+    /// Cevaplanan soru sistem önerisi miydi?
+    /// 
+    /// Sistem önerisi sorular için progress update davranışı normal dictionary itemlarından farklı olabilir.
+    /// Faz 23'te öneri item kullanıcı dictionary'sinde olmayabileceği için bu bilgi önemlidir.
+    /// </summary>
+    public bool IsSystemRecommended { get; init; }
+
+    /// <summary>
+    /// Cevaplanan soru sistem önerisiyse ilgili QuizRecommendationItem id değeridir.
+    /// 
+    /// Kullanıcı yanlış bildiği öneriyi dictionary'sine eklemek isterse
+    /// save-to-dictionary endpointinde bu id kullanılabilir.
+    /// </summary>
+    public Guid? QuizRecommendationItemId { get; init; }
+
+    /// <summary>
+    /// Sistem önerisinin neden gösterildiğini belirtir.
+    /// 
+    /// Normal dictionary/deck sorularında null olur.
+    /// </summary>
+    public string? RecommendationReason { get; init; }
+
+    /// <summary>
+    /// Cevaplanan sistem önerisi item dictionary'ye eklenebilir mi?
+    /// 
+    /// Faz 23 kararı:
+    /// Yanlış bilinen öneriyi otomatik dictionary'ye eklemiyoruz.
+    /// Bunun yerine frontend'e eklenebilir bilgisini döneceğiz.
+    /// Kullanıcı isterse ayrı endpoint ile dictionary'ye ekleyecek.
+    /// </summary>
+    public bool CanAddRecommendedItemToDictionary { get; init; }
+
 }

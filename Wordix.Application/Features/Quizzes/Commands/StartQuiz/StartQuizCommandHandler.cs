@@ -57,12 +57,15 @@ public sealed class StartQuizCommandHandler
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
     private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
+    private readonly IRepository<UserPreference> _userPreferenceRepository;
+    private readonly IRepository<QuizRecommendationItem> _quizRecommendationItemRepository;
+    private readonly IRepository<SearchSuggestionLog> _searchSuggestionLogRepository;
+    private readonly IQuizRecommendationService _quizRecommendationService;
     private readonly IRepository<QuizSession> _quizSessionRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
     private readonly IQuizQuestionGeneratorResolver _quizQuestionGeneratorResolver;
     private readonly IUnitOfWork _unitOfWork;
-
     /// <summary>
     /// Handler ihtiyacı olan tüm servis ve repository abstraction'larını DI üzerinden alır.
     /// 
@@ -86,6 +89,10 @@ public sealed class StartQuizCommandHandler
         IRepository<Deck> deckRepository,
         IRepository<DeckItem> deckItemRepository,
         IRepository<UserLearningFlag> userLearningFlagRepository,
+        IRepository<UserPreference> userPreferenceRepository,
+        IRepository<QuizRecommendationItem> quizRecommendationItemRepository,
+        IRepository<SearchSuggestionLog> searchSuggestionLogRepository,
+        IQuizRecommendationService quizRecommendationService,
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
@@ -104,6 +111,10 @@ public sealed class StartQuizCommandHandler
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
         _userLearningFlagRepository = userLearningFlagRepository;
+        _userPreferenceRepository = userPreferenceRepository;
+        _quizRecommendationItemRepository = quizRecommendationItemRepository;
+        _searchSuggestionLogRepository = searchSuggestionLogRepository;
+        _quizRecommendationService = quizRecommendationService;
         _quizSessionRepository = quizSessionRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
@@ -126,20 +137,31 @@ public sealed class StartQuizCommandHandler
         var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
 
         // Request string değerlerini domain enum değerlerine çeviriyoruz.
-        // Controller veya handler içine dağınık string karşılaştırması koymamak için
-        // parse işlemini küçük helper methodlarda topluyoruz.
         var quizType = ParseQuizType(request.QuizType);
         var quizSourceType = ParseQuizSourceType(request.QuizSourceType);
         var quizContentMode = ParseQuizContentMode(request.QuizContentMode);
 
+        // Faz 23:
+        // UserPreference varsa quiz default difficulty ve include system recommendation değerlerini dikkate alıyoruz.
+        // Preference yoksa /api/profile/me gibi endpointlerde preference oluşturmadığımız için default değerlerle devam ediyoruz.
+        var userPreference = await _userPreferenceRepository.FirstOrDefaultAsync(
+            preference => preference.KeycloakUserId == keycloakUserId,
+            cancellationToken);
+
+        var preferredDifficultyGroup =
+            userPreference?.DefaultDifficultyGroup ?? DifficultyGroup.Beginner;
+
+        // Request değeri preference değerini override eder.
+        //
+        // true  => Bu quiz için önerileri açıkça aç.
+        // false => Bu quiz için önerileri açıkça kapat.
+        // null  => UserPreference varsa onu kullan, yoksa false kabul et.
+        var shouldIncludeSystemRecommendations =
+            request.IncludeSystemRecommendations
+            ?? userPreference?.IncludeSystemRecommendations
+            ?? false;
+
         // 2. Quiz kaynağına göre kullanılacak UserLearningItem listesini çözüyoruz.
-        //
-        // UserDictionary:
-        // - Kullanıcının tüm aktif dictionary itemları kullanılır.
-        //
-        // Deck:
-        // - Sadece ilgili deck içindeki UserLearningItem kayıtları kullanılır.
-        // - Deck ownership KeycloakUserId ile kontrol edilir.
         var userLearningItems = await ResolveUserLearningItemsForQuizSourceAsync(
             keycloakUserId: keycloakUserId,
             quizSourceType: quizSourceType,
@@ -153,47 +175,65 @@ public sealed class StartQuizCommandHandler
                 "QUIZ_SOURCE_IS_EMPTY");
         }
 
-        // 3. Dictionary itemlarından quiz üretmeye uygun candidate listesi hazırlıyoruz.
-        //
-        // Faz 21D itibarıyla bu candidate listesi Word/Phrase tabanlıdır.
-        // Sentence writing desteği bir sonraki alt adımda kontrollü eklenecektir.
-        var candidates = await BuildQuestionCandidatesAsync(
+        // 3. Dictionary/deck itemlarından normal quiz candidate listesi hazırlıyoruz.
+        var baseCandidates = await BuildQuestionCandidatesAsync(
             userLearningItems,
             quizType,
             quizContentMode,
             cancellationToken);
 
-        // Quiz tipine göre minimum aday sayısı değişir.
-        //
-        // Test quiz:
-        // - 4 seçenekli yapı nedeniyle en az 4 uygun item gerekir.
-        //
-        // Writing quiz:
-        // - Seçenek üretmediği için en az 1 uygun item yeterlidir.
         var minimumCandidateCount = ResolveMinimumCandidateCount(quizType);
 
-        if (candidates.Count < minimumCandidateCount)
+        // Faz 23:
+        // Sistem önerileri normal candidate listesine ek kaynak olarak karışır.
+        // Recommendation service QuizQuestion/QuizSession oluşturmaz; sadece candidate üretir.
+        var recommendationResult = QuizRecommendationResult.Empty(0);
+
+        if (shouldIncludeSystemRecommendations)
+        {
+            var recommendationQuota = ResolveRecommendationQuota(
+                requestedQuestionCount: request.QuestionCount,
+                baseCandidateCount: baseCandidates.Count,
+                minimumCandidateCount: minimumCandidateCount);
+
+            if (recommendationQuota > 0)
+            {
+                var excludedLearningItemIds = await ResolveExcludedLearningItemIdsForRecommendationsAsync(
+                    keycloakUserId,
+                    userLearningItems,
+                    cancellationToken);
+
+                recommendationResult = await _quizRecommendationService.GetRecommendationsAsync(
+                    new QuizRecommendationRequest
+                    {
+                        KeycloakUserId = keycloakUserId,
+                        QuizType = quizType,
+                        QuizContentMode = quizContentMode,
+                        PreferredDifficultyGroup = preferredDifficultyGroup,
+                        RequestedRecommendationCount = recommendationQuota,
+                        ExcludedLearningItemIds = excludedLearningItemIds
+                    },
+                    cancellationToken);
+            }
+        }
+
+        var candidates = baseCandidates
+            .Concat(recommendationResult.Candidates)
+            .ToArray();
+
+        if (candidates.Length < minimumCandidateCount)
         {
             throw new BusinessRuleException(
                 BuildNotEnoughQuizItemsMessage(quizType),
                 "NOT_ENOUGH_QUIZ_ITEMS");
         }
 
-        // Kullanıcı 10 soru isteyebilir ama elimizde 3 uygun item varsa
+        // Kullanıcı 10 soru isteyebilir ama elimizde daha az uygun item varsa
         // üretilebilir maksimum kadar soru oluştururuz.
         var actualQuestionCount = Math.Min(
             request.QuestionCount,
-            candidates.Count);
+            candidates.Length);
 
-        // QuizType'a göre doğru generator'ı resolver üzerinden seçiyoruz.
-        //
-        // Test:
-        // - MultipleChoiceTranslationQuestionGenerator
-        //
-        // Writing:
-        // - WrittenTranslationQuestionGenerator
-        //
-        // Böylece handler tek bir generator implementation'ına bağımlı kalmaz.
         var quizQuestionGenerator = _quizQuestionGeneratorResolver.Resolve(quizType);
 
         // 4. Generator request modelini hazırlıyoruz.
@@ -201,8 +241,6 @@ public sealed class StartQuizCommandHandler
         {
             RequestedQuestionCount = actualQuestionCount,
 
-            // Test quiz için 4 seçenek gerekir.
-            // Writing quiz seçenek üretmediği için bu değer generator tarafından kullanılmaz.
             OptionCountPerQuestion = quizType == QuizType.Test
                 ? OptionCountPerQuestion
                 : 0,
@@ -222,25 +260,21 @@ public sealed class StartQuizCommandHandler
                 "QUIZ_QUESTIONS_COULD_NOT_BE_GENERATED");
         }
 
+        var hasGeneratedSystemRecommendation = generationResult.Questions
+            .Any(question => question.IsSystemRecommended);
+
         // 6. QuizSession oluşturuyoruz.
         //
-        // Yeni QuizSession constructor imzası artık UserProfileId değil KeycloakUserId alır.
-        //
-        // İlk prototipte:
-        // - Test quiz
-        // - Kullanıcının dictionary'si
-        // - WordsOnly
-        // - Beginner default difficulty
-        // - Sistem önerisi yok
-        // - Deck yok
+        // IncludeSystemRecommendations alanına request niyetini değil,
+        // gerçekten quiz içine sistem önerisi girip girmediğini yazıyoruz.
         var quizSession = new QuizSession(
              keycloakUserId,
              quizType,
              quizSourceType,
              quizContentMode,
-             DifficultyGroup.Beginner,
+             preferredDifficultyGroup,
              generationResult.GeneratedQuestionCount,
-             includeSystemRecommendations: false,
+             includeSystemRecommendations: hasGeneratedSystemRecommendation,
              deckId: quizSourceType == QuizSourceType.Deck
                  ? request.DeckId
                  : null);
@@ -261,12 +295,6 @@ public sealed class StartQuizCommandHandler
 
             var questionType = QuizMapper.ToDomainQuestionType(generatedQuestion.QuestionType);
 
-            // Mevcut QuizQuestion entity alanları:
-            // QuizSessionId, LearningItemId, QuestionType, QuestionText,
-            // CorrectAnswer, DisplayOrder, IsSystemRecommended.
-            //
-            // Bu entity'de UserLearningItemId, WordId, CorrectMeaningId yok.
-            // O yüzden constructor'a sadece mevcut domain modelindeki bilgileri gönderiyoruz.
             var quizQuestion = new QuizQuestion(
                 quizSession.Id,
                 generatedQuestion.LearningItemId,
@@ -274,22 +302,50 @@ public sealed class StartQuizCommandHandler
                 generatedQuestion.QuestionText,
                 correctAnswerText,
                 generatedQuestion.QuestionOrder,
-                isSystemRecommended: false);
+                isSystemRecommended: generatedQuestion.IsSystemRecommended);
 
             await _quizQuestionRepository.AddAsync(
                 quizQuestion,
                 cancellationToken);
+
+            QuizRecommendationItem? quizRecommendationItem = null;
+
+            // Faz 23:
+            // Eğer soru sistem önerisi candidate'ından üretildiyse,
+            // hem QuizRecommendationItem hem SearchSuggestionLog kaydı oluşturuyoruz.
+            if (generatedQuestion.IsSystemRecommended)
+            {
+                var recommendationReason =
+                    generatedQuestion.RecommendationReason ?? RecommendationReason.Unknown;
+
+                quizRecommendationItem = new QuizRecommendationItem(
+                    quizSession.Id,
+                    quizQuestion.Id,
+                    quizQuestion.LearningItemId,
+                    recommendationReason,
+                    generatedQuestion.DifficultyGroup);
+
+                await _quizRecommendationItemRepository.AddAsync(
+                    quizRecommendationItem,
+                    cancellationToken);
+
+                var suggestionLog = new SearchSuggestionLog(
+                    keycloakUserId,
+                    quizQuestion.LearningItemId,
+                    recommendationReason,
+                    quizSession.Id,
+                    quizRecommendationItem.Id);
+
+                await _searchSuggestionLogRepository.AddAsync(
+                    suggestionLog,
+                    cancellationToken);
+            }
 
             var createdOptionResponses = new List<QuizOptionResponse>();
 
             foreach (var generatedOption in generatedQuestion.Options
                 .OrderBy(option => option.DisplayOrder))
             {
-                // Mevcut QuizOption entity alanları:
-                // QuizQuestionId, OptionText, IsCorrect, DisplayOrder.
-                //
-                // Bu entity'de MeaningId yok.
-                // MeaningId generator ara modelinde kalabilir ama QuizOption entity'ye yazılmaz.
                 var quizOption = new QuizOption(
                     quizQuestion.Id,
                     generatedOption.OptionText,
@@ -308,10 +364,11 @@ public sealed class StartQuizCommandHandler
                 QuizMapper.ToQuizQuestionResponse(
                     quizQuestion: quizQuestion,
                     generatedQuestion: generatedQuestion,
-                    optionResponses: createdOptionResponses));
+                    optionResponses: createdOptionResponses,
+                    quizRecommendationItem: quizRecommendationItem));
         }
 
-        // 8. QuizSession + QuizQuestion + QuizOption kayıtlarını tek SaveChanges ile kaydediyoruz.
+        // 8. Tüm kayıtları tek SaveChanges ile kaydediyoruz.
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return QuizMapper.ToStartQuizResponse(
@@ -735,6 +792,71 @@ public sealed class StartQuizCommandHandler
         }
 
         return candidates;
+    }
+
+
+    /// <summary>
+    /// Quiz içine en fazla kaç sistem önerisi candidate ekleneceğini hesaplar.
+    /// 
+    /// Ana kural:
+    /// - Normal durumda soru sayısının yaklaşık %30'u kadar öneri eklenir.
+    /// - En az 1 öneri eklenmeye çalışılır.
+    /// - Test quiz gibi minimum candidate ihtiyacı varsa, eksik aday sayısını tamamlamak için quota artırılabilir.
+    /// 
+    /// Bu neden gerekli?
+    /// - Sistem önerileri tüm quizi ele geçirmesin.
+    /// - Ama kullanıcının item sayısı test quiz için yetmiyorsa öneriler quiz başlatmayı mümkün kılsın.
+    /// </summary>
+    private static int ResolveRecommendationQuota(
+        int requestedQuestionCount,
+        int baseCandidateCount,
+        int minimumCandidateCount)
+    {
+        if (requestedQuestionCount <= 0)
+        {
+            return 0;
+        }
+
+        var ratioBasedQuota = Math.Max(
+            1,
+            (int)Math.Floor(requestedQuestionCount * 0.30));
+
+        var neededToReachMinimumCandidateCount = Math.Max(
+            0,
+            minimumCandidateCount - baseCandidateCount);
+
+        var quota = Math.Max(
+            ratioBasedQuota,
+            neededToReachMinimumCandidateCount);
+
+        return Math.Min(
+            quota,
+            requestedQuestionCount);
+    }
+
+
+    /// <summary>
+    /// Sistem önerilerinde önerilmemesi gereken LearningItem id listesini üretir.
+    /// 
+    /// Faz 23 kuralı:
+    /// Kullanıcının dictionary'sinde zaten olan itemlar sistem önerisi olarak gelmemelidir.
+    /// 
+    /// Deck quizde bile tüm aktif dictionary itemlarını dışlıyoruz.
+    /// Çünkü item deckte olmasa bile kullanıcının dictionary'sindeyse "sistem önerisi" sayılmaz.
+    /// </summary>
+    private async Task<IReadOnlyCollection<Guid>> ResolveExcludedLearningItemIdsForRecommendationsAsync(
+        string keycloakUserId,
+        IReadOnlyCollection<UserLearningItem> currentSourceItems,
+        CancellationToken cancellationToken)
+    {
+        var allUserDictionaryItems = await _userLearningItemRepository
+            .GetActiveItemsByUserAsync(keycloakUserId, cancellationToken);
+
+        return allUserDictionaryItems
+            .Concat(currentSourceItems)
+            .Select(item => item.LearningItemId)
+            .Distinct()
+            .ToArray();
     }
 
 

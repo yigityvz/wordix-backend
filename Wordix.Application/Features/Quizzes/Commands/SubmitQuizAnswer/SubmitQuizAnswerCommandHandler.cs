@@ -43,6 +43,7 @@ public sealed class SubmitQuizAnswerCommandHandler
     private readonly IRepository<QuizOption> _quizOptionRepository;
     private readonly IRepository<QuizAnswer> _quizAnswerRepository;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
+    private readonly IRepository<QuizRecommendationItem> _quizRecommendationItemRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
     private readonly IRepository<LearningProgressHistory> _learningProgressHistoryRepository;
     private readonly IQuizAnswerEvaluator _quizAnswerEvaluator;
@@ -68,6 +69,7 @@ public sealed class SubmitQuizAnswerCommandHandler
         IRepository<QuizOption> quizOptionRepository,
         IRepository<QuizAnswer> quizAnswerRepository,
         IRepository<UserLearningItem> userLearningItemRepository,
+        IRepository<QuizRecommendationItem> quizRecommendationItemRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository,
         IRepository<LearningProgressHistory> learningProgressHistoryRepository,
         IQuizAnswerEvaluator quizAnswerEvaluator,
@@ -82,6 +84,7 @@ public sealed class SubmitQuizAnswerCommandHandler
         _quizOptionRepository = quizOptionRepository;
         _quizAnswerRepository = quizAnswerRepository;
         _userLearningItemRepository = userLearningItemRepository;
+        _quizRecommendationItemRepository = quizRecommendationItemRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
         _learningProgressHistoryRepository = learningProgressHistoryRepository;
         _quizAnswerEvaluator = quizAnswerEvaluator;
@@ -212,99 +215,152 @@ public sealed class SubmitQuizAnswerCommandHandler
             quizAnswer,
             cancellationToken);
 
-        // 11. Bu question hangi LearningItem'dan üretildiyse,
+        // 11. Eğer cevaplanan soru sistem önerisiyse,
+        // ilgili QuizRecommendationItem kaydını bulup cevap sonucunu güncelliyoruz.
+        //
+        // Normal dictionary/deck sorularında quizRecommendationItem null kalır.
+        QuizRecommendationItem? quizRecommendationItem = null;
+
+        if (quizQuestion.IsSystemRecommended)
+        {
+            quizRecommendationItem = await _quizRecommendationItemRepository.FirstOrDefaultAsync(
+                recommendationItem => recommendationItem.QuizQuestionId == quizQuestion.Id,
+                cancellationToken);
+
+            if (quizRecommendationItem is null)
+            {
+                throw new BusinessRuleException(
+                    "System recommended quiz question does not have a recommendation tracking record.",
+                    "QUIZ_RECOMMENDATION_ITEM_NOT_FOUND");
+            }
+
+            quizRecommendationItem.RegisterAnswerResult(evaluationResult.IsCorrect);
+        }
+
+        // 12. Bu question hangi LearningItem'dan üretildiyse,
         // current user'ın UserLearningItem kaydını buluyoruz.
         //
-        // Yeni mimaride dictionary ownership kontrolü UserProfileId ile değil,
-        // KeycloakUserId ile yapılır.
+        // Normal soru:
+        // - UserLearningItem kesinlikle olmalı.
+        // - Yoksa hata.
+        //
+        // System recommendation soru:
+        // - UserLearningItem olmayabilir.
+        // - Çünkü önerilen item henüz kullanıcının dictionary'sine eklenmemiş olabilir.
+        // - Bu durumda progress update yapmayız.
         var userLearningItem = await _userLearningItemRepository.FirstOrDefaultAsync(
             item => item.KeycloakUserId == keycloakUserId
                     && item.LearningItemId == quizQuestion.LearningItemId
                     && item.IsActive,
             cancellationToken);
 
+        LearningProgressUpdateResult? progressUpdateResult = null;
+
+        var canAddRecommendedItemToDictionary = false;
+
         if (userLearningItem is null)
         {
-            throw new BusinessRuleException(
-                "The answered learning item is not saved in the current user's dictionary.",
-                "ANSWERED_ITEM_NOT_FOUND_IN_USER_DICTIONARY");
+            if (!quizQuestion.IsSystemRecommended)
+            {
+                throw new BusinessRuleException(
+                    "The answered learning item is not saved in the current user's dictionary.",
+                    "ANSWERED_ITEM_NOT_FOUND_IN_USER_DICTIONARY");
+            }
+
+            // Faz 23 kararı:
+            // Sistem önerisi yanlış bilindiyse otomatik dictionary'ye eklemiyoruz.
+            // Frontend'e eklenebilir bilgisini dönüyoruz.
+            // Kullanıcı isterse ayrı endpoint ile dictionary'ye ekleyecek.
+            canAddRecommendedItemToDictionary =
+                quizRecommendationItem is not null &&
+                !evaluationResult.IsCorrect &&
+                !quizRecommendationItem.WasAddedToDictionary;
         }
-
-        // 12. UserLearningProgress kaydını buluyoruz.
-        var userLearningProgress = await _userLearningProgressRepository.FirstOrDefaultAsync(
-            progress => progress.UserLearningItemId == userLearningItem.Id,
-            cancellationToken);
-
-        if (userLearningProgress is null)
+        else
         {
-            throw new NotFoundException(
-                "User learning progress",
-                userLearningItem.Id);
+            // 13. UserLearningProgress kaydını buluyoruz.
+            var userLearningProgress = await _userLearningProgressRepository.FirstOrDefaultAsync(
+                progress => progress.UserLearningItemId == userLearningItem.Id,
+                cancellationToken);
+
+            if (userLearningProgress is null)
+            {
+                throw new NotFoundException(
+                    "User learning progress",
+                    userLearningItem.Id);
+            }
+
+            var reviewedAt = DateTimeOffset.UtcNow;
+
+            // 14. Confidence score hesaplanır.
+            var scoreCalculationResult = _learningScoreCalculator.Calculate(
+                new LearningScoreCalculationRequest
+                {
+                    CurrentConfidenceScore = userLearningProgress.LearningConfidenceScore,
+                    IsCorrect = evaluationResult.IsCorrect,
+                    QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds
+                });
+
+            // 15. Review schedule hesaplanır.
+            var reviewScheduleEvent = _reviewScheduleCalculator.Calculate(
+                new ReviewScheduleCalculationRequest
+                {
+                    IsCorrect = evaluationResult.IsCorrect,
+                    NewConfidenceScore = scoreCalculationResult.NewConfidenceScore,
+                    CurrentRepetitionLevel = userLearningProgress.RepetitionLevel,
+                    QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds,
+                    ReviewedAt = reviewedAt
+                });
+
+            // 16. Progress update sonucu hesaplanır.
+            progressUpdateResult = _learningProgressUpdater.CalculateUpdate(
+                new LearningProgressUpdateRequest
+                {
+                    UserLearningProgressId = userLearningProgress.Id,
+                    UserLearningItemId = userLearningItem.Id,
+                    CurrentLearningStatus = userLearningProgress.LearningStatus,
+                    CurrentCorrectCount = userLearningProgress.CorrectCount,
+                    CurrentWrongCount = userLearningProgress.WrongCount,
+                    CurrentConsecutiveCorrectCount = userLearningProgress.ConsecutiveCorrectCount,
+                    CurrentConsecutiveWrongCount = userLearningProgress.ConsecutiveWrongCount,
+                    CurrentRepetitionLevel = userLearningProgress.RepetitionLevel,
+                    CurrentNextReviewDate = userLearningProgress.NextReviewDate,
+                    IsCorrect = evaluationResult.IsCorrect,
+                    ScoreCalculationResult = scoreCalculationResult,
+                    ReviewScheduleEvent = reviewScheduleEvent,
+                    ReviewedAt = reviewedAt
+                });
+
+            // 17. Hesaplanan progress state'i domain entity'ye uygulanır.
+            ApplyProgressUpdate(
+                userLearningProgress,
+                progressUpdateResult,
+                evaluationResult.IsCorrect);
+
+            // 18. Progress history oluşturulur.
+            var progressHistory = new LearningProgressHistory(
+                userLearningProgress.Id,
+                progressUpdateResult.PreviousLearningStatus,
+                progressUpdateResult.NewLearningStatus,
+                progressUpdateResult.PreviousConfidenceScore,
+                progressUpdateResult.NewConfidenceScore,
+                progressUpdateResult.ChangeReason);
+
+            await _learningProgressHistoryRepository.AddAsync(
+                progressHistory,
+                cancellationToken);
         }
 
-        var reviewedAt = DateTimeOffset.UtcNow;
-
-        // 13. Confidence score hesaplanır.
-        var scoreCalculationResult = _learningScoreCalculator.Calculate(
-            new LearningScoreCalculationRequest
-            {
-                CurrentConfidenceScore = userLearningProgress.LearningConfidenceScore,
-                IsCorrect = evaluationResult.IsCorrect,
-                QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds
-            });
-
-        // 14. Review schedule hesaplanır.
-        var reviewScheduleEvent = _reviewScheduleCalculator.Calculate(
-            new ReviewScheduleCalculationRequest
-            {
-                IsCorrect = evaluationResult.IsCorrect,
-                NewConfidenceScore = scoreCalculationResult.NewConfidenceScore,
-                CurrentRepetitionLevel = userLearningProgress.RepetitionLevel,
-                QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds,
-                ReviewedAt = reviewedAt
-            });
-
-        // 15. Progress update sonucu hesaplanır.
-        var progressUpdateResult = _learningProgressUpdater.CalculateUpdate(
-            new LearningProgressUpdateRequest
-            {
-                UserLearningProgressId = userLearningProgress.Id,
-                UserLearningItemId = userLearningItem.Id,
-                CurrentLearningStatus = userLearningProgress.LearningStatus,
-                CurrentCorrectCount = userLearningProgress.CorrectCount,
-                CurrentWrongCount = userLearningProgress.WrongCount,
-                CurrentConsecutiveCorrectCount = userLearningProgress.ConsecutiveCorrectCount,
-                CurrentConsecutiveWrongCount = userLearningProgress.ConsecutiveWrongCount,
-                CurrentRepetitionLevel = userLearningProgress.RepetitionLevel,
-                CurrentNextReviewDate = userLearningProgress.NextReviewDate,
-                IsCorrect = evaluationResult.IsCorrect,
-                ScoreCalculationResult = scoreCalculationResult,
-                ReviewScheduleEvent = reviewScheduleEvent,
-                ReviewedAt = reviewedAt
-            });
-
-        // 16. Hesaplanan progress state'i domain entity'ye uygulanır.
-        // Entity update işi burada yapılır, hesaplama logic'i ise servislerde kalır.
-        ApplyProgressUpdate(
-            userLearningProgress,
-            progressUpdateResult,
-            evaluationResult.IsCorrect);
-
-        // 17. Progress history oluşturulur.
-        // Daha önce Faz 14'te kullandığımız constructor düzeniyle uyumludur.
-        var progressHistory = new LearningProgressHistory(
-            userLearningProgress.Id,
-            progressUpdateResult.PreviousLearningStatus,
-            progressUpdateResult.NewLearningStatus,
-            progressUpdateResult.PreviousConfidenceScore,
-            progressUpdateResult.NewConfidenceScore,
-            progressUpdateResult.ChangeReason);
-
-        await _learningProgressHistoryRepository.AddAsync(
-            progressHistory,
-            cancellationToken);
-
-        // 18. Tüm değişiklikler tek transaction/save akışında kaydedilir.
+        // 19. Tüm değişiklikler tek transaction/save akışında kaydedilir.
+        //
+        // Normal soru:
+        // - QuizAnswer
+        // - UserLearningProgress
+        // - LearningProgressHistory
+        //
+        // System recommendation soru dictionary'de değilse:
+        // - QuizAnswer
+        // - QuizRecommendationItem.WasAnsweredCorrectly
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         return QuizMapper.ToSubmitQuizAnswerResponse(
@@ -313,7 +369,9 @@ public sealed class SubmitQuizAnswerCommandHandler
             quizQuestion: quizQuestion,
             selectedOption: selectedOption,
             evaluationResult: evaluationResult,
-            progressUpdateResult: progressUpdateResult);
+            progressUpdateResult: progressUpdateResult,
+            quizRecommendationItem: quizRecommendationItem,
+            canAddRecommendedItemToDictionary: canAddRecommendedItemToDictionary);
     }
 
 

@@ -42,6 +42,15 @@ public sealed class StartQuizResponse
     /// </summary>
     public string QuizContentMode { get; init; } = string.Empty;
 
+
+    /// <summary>
+    /// Bu quiz oturumunda sistem önerisi itemlar dahil edildi mi?
+    /// 
+    /// Frontend bu alanı kullanarak quiz ekranında sistem önerisi etiketleri
+    /// veya açıklama metinleri gösterebilir.
+    /// </summary>
+    public bool IncludeSystemRecommendations { get; init; }
+
     /// <summary>
     /// Oluşturulan soru sayısıdır.
     /// 

@@ -6,6 +6,7 @@ using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Application.Features.Quizzes.Models;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
+using Wordix.Application.Features.Quizzes.Commands.SaveRecommendedItemToDictionary;
 
 namespace Wordix.Application.Features.Quizzes.Mappers;
 
@@ -44,10 +45,10 @@ public static class QuizMapper
             QuizSourceType = request?.QuizSourceType ?? string.Empty,
             QuizContentMode = request?.QuizContentMode ?? string.Empty,
             QuestionCount = request?.QuestionCount ?? 0,
-            DeckId = request?.DeckId
+            DeckId = request?.DeckId,
+            IncludeSystemRecommendations = request?.IncludeSystemRecommendations
         };
     }
-
     /// <summary>
     /// Route'tan gelen quizSessionId ve API request DTO'sunu
     /// SubmitQuizAnswerCommand modeline dönüştürür.
@@ -100,7 +101,8 @@ public static class QuizMapper
     public static QuizQuestionResponse ToQuizQuestionResponse(
         QuizQuestion quizQuestion,
         GeneratedQuizQuestion generatedQuestion,
-        IReadOnlyCollection<QuizOptionResponse> optionResponses)
+        IReadOnlyCollection<QuizOptionResponse> optionResponses,
+        QuizRecommendationItem? quizRecommendationItem = null)
     {
         ArgumentNullException.ThrowIfNull(quizQuestion);
         ArgumentNullException.ThrowIfNull(generatedQuestion);
@@ -120,6 +122,16 @@ public static class QuizMapper
             // API response'ta generator'ın daha açıklayıcı question type değerini döndürüyoruz.
             // Database tarafında ise QuizQuestion.QuestionType domain enum olarak saklanır.
             QuestionType = generatedQuestion.QuestionType,
+
+
+            IsSystemRecommended =
+            quizQuestion.IsSystemRecommended || generatedQuestion.IsSystemRecommended,
+
+            RecommendationReason = generatedQuestion.RecommendationReason?.ToString(),
+
+            QuizRecommendationItemId =
+                 quizRecommendationItem?.Id ?? generatedQuestion.QuizRecommendationItemId,
+
 
             Options = optionResponses
                 .OrderBy(option => option.DisplayOrder)
@@ -146,6 +158,7 @@ public static class QuizMapper
             QuizSourceType = request.QuizSourceType.Trim(),
             QuizContentMode = request.QuizContentMode.Trim(),
             QuestionCount = questionResponses.Count,
+            IncludeSystemRecommendations = quizSession.IncludeSystemRecommendations,
             StartedAt = quizSession.StartedAt,
             Status = quizSession.Status.ToString(),
             Questions = questionResponses
@@ -237,6 +250,59 @@ public static class QuizMapper
         };
     }
 
+
+    /// <summary>
+    /// Route'tan gelen QuizRecommendationItemId değerini
+    /// SaveRecommendedItemToDictionaryCommand modeline dönüştürür.
+    /// 
+    /// Controller body almaz.
+    /// Çünkü bu endpointte ihtiyaç duyulan tek veri route id değeridir.
+    /// </summary>
+    public static SaveRecommendedItemToDictionaryCommand ToSaveRecommendedItemToDictionaryCommand(
+        Guid quizRecommendationItemId)
+    {
+        return new SaveRecommendedItemToDictionaryCommand(
+            quizRecommendationItemId);
+    }
+
+    /// <summary>
+    /// Sistem önerisi dictionary'ye eklendikten sonra API response modelini üretir.
+    /// 
+    /// Handler use-case akışını yönetir.
+    /// Response DTO propertylerini tek tek dizme işi mapper'da kalır.
+    /// </summary>
+    public static SaveRecommendedItemToDictionaryResponse ToSaveRecommendedItemToDictionaryResponse(
+        QuizRecommendationItem recommendationItem,
+        UserLearningItem userLearningItem,
+        LearningItem learningItem,
+        UserLearningProgress userLearningProgress,
+        bool wasAlreadySaved,
+        bool wasReactivated)
+    {
+        ArgumentNullException.ThrowIfNull(recommendationItem);
+        ArgumentNullException.ThrowIfNull(userLearningItem);
+        ArgumentNullException.ThrowIfNull(learningItem);
+        ArgumentNullException.ThrowIfNull(userLearningProgress);
+
+        return new SaveRecommendedItemToDictionaryResponse
+        {
+            QuizRecommendationItemId = recommendationItem.Id,
+            LearningItemId = learningItem.Id,
+            UserLearningItemId = userLearningItem.Id,
+            UserLearningProgressId = userLearningProgress.Id,
+            SelectedMeaningId = userLearningItem.SelectedMeaningId,
+            RecommendationReason = recommendationItem.RecommendationReason.ToString(),
+            WasAlreadySaved = wasAlreadySaved,
+            WasReactivated = wasReactivated,
+            WasAddedToDictionary = recommendationItem.WasAddedToDictionary,
+            SavedAt = userLearningItem.SavedAt,
+            LearningStatus = userLearningProgress.LearningStatus.ToString(),
+            LearningConfidenceScore = userLearningProgress.LearningConfidenceScore,
+            IsActive = userLearningItem.IsActive
+        };
+    }
+
+
     /// <summary>
     /// Quiz cevaplama use-case'i sonunda API'ye dönecek response modelini üretir.
     /// </summary>
@@ -246,13 +312,15 @@ public static class QuizMapper
         QuizQuestion quizQuestion,
         QuizOption? selectedOption,
         QuizAnswerEvaluationResult evaluationResult,
-        LearningProgressUpdateResult progressUpdateResult)
+        LearningProgressUpdateResult? progressUpdateResult,
+        QuizRecommendationItem? quizRecommendationItem = null,
+        bool canAddRecommendedItemToDictionary = false)
     {
         ArgumentNullException.ThrowIfNull(quizAnswer);
         ArgumentNullException.ThrowIfNull(quizSession);
         ArgumentNullException.ThrowIfNull(quizQuestion);
         ArgumentNullException.ThrowIfNull(evaluationResult);
-        ArgumentNullException.ThrowIfNull(progressUpdateResult);
+        
 
         return new SubmitQuizAnswerResponse
         {
@@ -275,18 +343,33 @@ public static class QuizMapper
             QuestionResponseTimeInMilliseconds = evaluationResult.QuestionResponseTimeInMilliseconds,
             AnsweredAt = quizAnswer.AnsweredAt,
 
-            CorrectCount = progressUpdateResult.CorrectCount,
-            WrongCount = progressUpdateResult.WrongCount,
-            ConsecutiveCorrectCount = progressUpdateResult.ConsecutiveCorrectCount,
-            ConsecutiveWrongCount = progressUpdateResult.ConsecutiveWrongCount,
+            CorrectCount = progressUpdateResult?.CorrectCount ?? 0,
+            WrongCount = progressUpdateResult?.WrongCount ?? 0,
+            ConsecutiveCorrectCount = progressUpdateResult?.ConsecutiveCorrectCount ?? 0,
+            ConsecutiveWrongCount = progressUpdateResult?.ConsecutiveWrongCount ?? 0,
 
-            PreviousLearningStatus = progressUpdateResult.PreviousLearningStatus.ToString(),
-            CurrentLearningStatus = progressUpdateResult.NewLearningStatus.ToString(),
+            PreviousLearningStatus = progressUpdateResult is null
+                ? string.Empty
+                : progressUpdateResult.PreviousLearningStatus.ToString(),
 
-            PreviousConfidenceScore = progressUpdateResult.PreviousConfidenceScore,
-            CurrentConfidenceScore = progressUpdateResult.NewConfidenceScore,
+                        CurrentLearningStatus = progressUpdateResult is null
+                ? string.Empty
+                : progressUpdateResult.NewLearningStatus.ToString(),
 
-            NextReviewDate = progressUpdateResult.NextReviewDate
+            PreviousConfidenceScore = progressUpdateResult?.PreviousConfidenceScore ?? 0,
+            CurrentConfidenceScore = progressUpdateResult?.NewConfidenceScore ?? 0,
+
+            NextReviewDate = progressUpdateResult?.NextReviewDate,
+
+            ProgressUpdated = progressUpdateResult is not null,
+
+            IsSystemRecommended = quizQuestion.IsSystemRecommended,
+
+            QuizRecommendationItemId = quizRecommendationItem?.Id,
+
+            RecommendationReason = quizRecommendationItem?.RecommendationReason.ToString(),
+
+            CanAddRecommendedItemToDictionary = canAddRecommendedItemToDictionary
         };
     }
 

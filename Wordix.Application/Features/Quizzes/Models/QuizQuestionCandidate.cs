@@ -89,6 +89,30 @@ public sealed class QuizQuestionCandidate
     /// </summary>
     public bool IsDifficult { get; init; }
 
+
+    /// <summary>
+    /// Bu candidate sistem önerisi olarak mı geldi?
+    /// 
+    /// Normal UserDictionary veya Deck itemlarında false olur.
+    /// IQuizRecommendationService tarafından üretilen candidate'larda true olur.
+    /// </summary>
+    public bool IsSystemRecommended { get; init; }
+
+    /// <summary>
+    /// Sistem önerisi candidate ise öneri sebebidir.
+    /// 
+    /// Normal dictionary/deck candidate'larında null olur.
+    /// </summary>
+    public RecommendationReason? RecommendationReason { get; init; }
+
+    /// <summary>
+    /// Candidate'ın zorluk grubudur.
+    /// 
+    /// Faz 23'te QuizRecommendationItem oluştururken öneri anındaki DifficultyGroup bilgisini
+    /// snapshot olarak kaydetmek için kullanılacaktır.
+    /// </summary>
+    public DifficultyGroup DifficultyGroup { get; init; } = DifficultyGroup.Unknown;
+
     /// <summary>
     /// Doğru cevabın Meaning id değeridir.
     /// 

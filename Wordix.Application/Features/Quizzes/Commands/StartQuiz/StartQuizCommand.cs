@@ -61,4 +61,13 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// QuizSourceType = UserDictionary olduğunda null olabilir.
     /// </summary>
     public Guid? DeckId { get; init; }
+
+    /// <summary>
+    /// Bu quiz için sistem önerileri dahil edilsin mi?
+    /// 
+    /// Nullable tutulur:
+    /// - null ise handler UserPreference.IncludeSystemRecommendations değerine bakar.
+    /// - true/false ise request değeri preference değerini override eder.
+    /// </summary>
+    public bool? IncludeSystemRecommendations { get; init; }
 }

@@ -91,7 +91,7 @@ public sealed class QuizzesController : ControllerBase
         // Eğer request null gelirse mapper boş/default değerlerle command üretir.
         // StartQuizCommandValidator bu durumu ValidationBehavior üzerinden yakalar.
         var command = QuizMapper.ToStartQuizCommand(request);
-
+        
         var response = await _sender.Send(command, cancellationToken);
 
         var apiResponse = ApiResponse<StartQuizResponse>.Ok(
@@ -175,6 +175,46 @@ public sealed class QuizzesController : ControllerBase
             ApiResponse<QuizSummaryResponse>.Ok(
                 response,
                 "Quiz summary retrieved successfully."));
+    }
+
+
+    /// <summary>
+    /// Sistem önerisi olarak quizde gösterilen bir item'ı current user'ın dictionary'sine ekler.
+    /// 
+    /// Endpoint:
+    /// POST /api/quizzes/recommendations/{quizRecommendationItemId}/save-to-dictionary
+    /// 
+    /// Bu endpoint ne zaman kullanılır?
+    /// - Kullanıcı sistem önerisi olarak gelen bir soruyu yanlış bildiyse,
+    ///   frontend "Sözlüğüme ekle" butonu gösterebilir.
+    /// - Kullanıcı bu butona bastığında bu endpoint çağrılır.
+    /// 
+    /// Önemli:
+    /// - Controller business logic içermez.
+    /// - Ownership kontrolü handler içinde QuizRecommendationItem -> QuizSession -> KeycloakUserId zinciriyle yapılır.
+    /// - Aynı item zaten dictionary'deyse duplicate oluşturulmaz.
+    /// </summary>
+    [HttpPost("recommendations/{quizRecommendationItemId:guid}/save-to-dictionary")]
+    [ProducesResponseType(typeof(ApiResponse<SaveRecommendedItemToDictionaryResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponse<SaveRecommendedItemToDictionaryResponse>>> SaveRecommendationToDictionary(
+        [FromRoute] Guid quizRecommendationItemId,
+        CancellationToken cancellationToken)
+    {
+        var command = QuizMapper.ToSaveRecommendedItemToDictionaryCommand(
+            quizRecommendationItemId);
+
+        var response = await _sender.Send(
+            command,
+            cancellationToken);
+
+        return Ok(
+            ApiResponse<SaveRecommendedItemToDictionaryResponse>.Ok(
+                response,
+                "Recommended item saved to dictionary successfully."));
     }
 
 }

@@ -70,4 +70,19 @@ public sealed class StartQuizRequest
     /// Başka kullanıcıya ait deck ile quiz başlatılamaz.
     /// </summary>
     public Guid? DeckId { get; init; }
+
+
+    /// <summary>
+    /// Bu quiz içine sistem önerisi itemlar dahil edilsin mi?
+    /// 
+    /// Nullable olmasının sebebi:
+    /// - true  => Bu quiz için sistem önerilerini açıkça aç.
+    /// - false => Bu quiz için sistem önerilerini açıkça kapat.
+    /// - null  => Kullanıcının UserPreference.IncludeSystemRecommendations ayarı kullanılsın.
+    /// 
+    /// Faz 23 kararı:
+    /// Bu alan ilk aşamada UserDictionary ve Deck quizlerine sistem önerisi karıştırmak için kullanılacak.
+    /// QuizSourceType = SystemRecommendations saf kaynak akışı şimdilik açılmayacak.
+    /// </summary>
+    public bool? IncludeSystemRecommendations { get; init; }
 }

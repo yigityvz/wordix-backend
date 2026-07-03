@@ -78,6 +78,11 @@ public static class ApplicationServiceRegistration
         services.AddScoped<WrittenTranslationQuestionGenerator>();
         services.AddScoped<IQuizQuestionGeneratorResolver, QuizQuestionGeneratorResolver>();
 
+        // System recommendation:
+        // Faz 23 itibarıyla quiz içine local database'den sistem önerisi itemlar karıştırılabilir.
+        // Handler recommendation algoritmasını bilmez; IQuizRecommendationService üzerinden çalışır.
+        services.AddScoped<IQuizRecommendationService, QuizRecommendationService>();
+
         // Quiz answer evaluation:
         // Cevap değerlendirme logic'ini handler'dan ayrı tutar.
         services.AddScoped<IQuizAnswerEvaluator, QuizAnswerEvaluator>();

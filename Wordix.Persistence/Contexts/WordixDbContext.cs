@@ -95,6 +95,15 @@ public class WordixDbContext : DbContext
     /// </summary>
     public DbSet<LookupHistory> LookupHistories => Set<LookupHistory>();
 
+
+    /// <summary>
+    /// Kullanıcıya gösterilen sistem önerilerinin log kayıtlarını tutar.
+    /// 
+    /// Faz 23'te quiz önerileri için kullanılacak.
+    /// İleride lookup/dashboard/review önerileri için de genişletilebilir.
+    /// </summary>
+    public DbSet<SearchSuggestionLog> SearchSuggestionLogs => Set<SearchSuggestionLog>();
+
     /// <summary>
     /// Kullanıcının kişisel dictionary kayıtlarını tutar.
     /// </summary>
@@ -147,6 +156,18 @@ public class WordixDbContext : DbContext
     /// Quiz oturumundaki soruları tutar.
     /// </summary>
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
+
+
+    /// <summary>
+    /// Quiz içine sistem önerisiyle eklenen itemların takip kayıtlarını tutar.
+    /// 
+    /// Bu tablo sayesinde:
+    /// - Hangi item sistem önerisi olarak geldi?
+    /// - Kullanıcı doğru mu bildi?
+    /// - Sonradan dictionary'ye eklendi mi?
+    /// gibi bilgiler analiz edilebilir.
+    /// </summary>
+    public DbSet<QuizRecommendationItem> QuizRecommendationItems => Set<QuizRecommendationItem>();
 
     /// <summary>
     /// Çoktan seçmeli quiz seçeneklerini tutar.

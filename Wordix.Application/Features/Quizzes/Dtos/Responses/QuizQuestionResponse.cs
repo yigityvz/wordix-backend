@@ -74,6 +74,35 @@ public sealed class QuizQuestionResponse
     /// </summary>
     public string QuestionType { get; init; } = string.Empty;
 
+
+    /// <summary>
+    /// Bu soru sistem önerisiyle mi eklendi?
+    /// 
+    /// true ise bu soru kullanıcının mevcut dictionary/deck itemından değil,
+    /// sistem recommendation akışından gelmiştir.
+    /// </summary>
+    public bool IsSystemRecommended { get; init; }
+
+    /// <summary>
+    /// Sistem önerisi ise öneri sebebidir.
+    /// 
+    /// Örnek:
+    /// DifficultyLevelMatch
+    /// StarterRecommendation
+    /// SimilarToDifficultItems
+    /// 
+    /// Normal dictionary/deck sorularında null olur.
+    /// </summary>
+    public string? RecommendationReason { get; init; }
+
+    /// <summary>
+    /// Bu soru bir QuizRecommendationItem kaydıyla ilişkiliyse onun id değeridir.
+    /// 
+    /// Faz 23'te özellikle submit answer sonrası veya save-to-dictionary akışında kullanılabilir.
+    /// Normal sorularda null olur.
+    /// </summary>
+    public Guid? QuizRecommendationItemId { get; init; }
+
     /// <summary>
     /// Soruya ait seçeneklerdir.
     /// 

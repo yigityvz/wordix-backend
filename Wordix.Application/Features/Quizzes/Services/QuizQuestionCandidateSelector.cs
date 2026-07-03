@@ -22,16 +22,86 @@ namespace Wordix.Application.Features.Quizzes.Services;
 internal static class QuizQuestionCandidateSelector
 {
     /// <summary>
-    /// Difficult itemlara öncelik vererek soru adaylarını seçer.
+    /// Difficult itemlara ve sistem önerilerine öncelik vererek soru adaylarını seçer.
     /// 
-    /// Kural:
-    /// - Difficult candidate yoksa normal rastgele seçim yapılır.
-    /// - Difficult candidate varsa soru sayısının yaklaşık yarısı Difficult itemlardan seçilmeye çalışılır.
-    /// - Yeterli Difficult item yoksa kalan normal itemlardan tamamlanır.
-    /// - Yeterli normal item yoksa kalan Difficult itemlarla tamamlanır.
-    /// - Son seçilen liste tekrar karıştırılır ki response'ta tüm Difficult sorular üst üste gelmesin.
+    /// Faz 22:
+    /// - Difficult itemlar öncelikli seçilir.
+    /// 
+    /// Faz 23:
+    /// - Sistem önerisi candidate varsa, soru sayısının yaklaşık %30'u kadar öneri seçilmeye çalışılır.
+    /// - Sistem önerileri tüm quizi ele geçirmez.
+    /// - Normal itemlar quiz içinde kalmaya devam eder.
     /// </summary>
     public static IReadOnlyList<QuizQuestionCandidate> SelectWithDifficultPriority(
+        IReadOnlyList<QuizQuestionCandidate> candidates,
+        int requestedQuestionCount)
+    {
+        if (requestedQuestionCount <= 0 || candidates.Count == 0)
+        {
+            return Array.Empty<QuizQuestionCandidate>();
+        }
+
+        var actualQuestionCount = Math.Min(
+            requestedQuestionCount,
+            candidates.Count);
+
+        var systemRecommendedCandidates = Shuffle(
+            candidates.Where(candidate => candidate.IsSystemRecommended));
+
+        var nonSystemCandidates = candidates
+            .Where(candidate => !candidate.IsSystemRecommended)
+            .ToArray();
+
+        var selectedCandidates = new List<QuizQuestionCandidate>();
+
+        if (systemRecommendedCandidates.Count > 0)
+        {
+            var recommendationQuota = Math.Max(
+                1,
+                (int)Math.Floor(actualQuestionCount * 0.30));
+
+            selectedCandidates.AddRange(
+                systemRecommendedCandidates.Take(recommendationQuota));
+        }
+
+        var remainingQuestionCount = actualQuestionCount - selectedCandidates.Count;
+
+        if (remainingQuestionCount > 0)
+        {
+            selectedCandidates.AddRange(
+                SelectDifficultFirst(
+                    nonSystemCandidates,
+                    remainingQuestionCount));
+        }
+
+        // Eğer normal adaylar kalan sayıyı dolduramadıysa,
+        // henüz seçilmemiş sistem önerilerinden tamamlarız.
+        var stillNeededQuestionCount = actualQuestionCount - selectedCandidates.Count;
+
+        if (stillNeededQuestionCount > 0)
+        {
+            var alreadySelectedLearningItemIds = selectedCandidates
+                .Select(candidate => candidate.LearningItemId)
+                .ToHashSet();
+
+            selectedCandidates.AddRange(
+                systemRecommendedCandidates
+                    .Where(candidate => !alreadySelectedLearningItemIds.Contains(candidate.LearningItemId))
+                    .Take(stillNeededQuestionCount));
+        }
+
+        return Shuffle(selectedCandidates)
+            .Take(actualQuestionCount)
+            .ToArray();
+    }
+
+
+    /// <summary>
+    /// Verilen aday havuzunda Difficult itemlara öncelik vererek seçim yapar.
+    /// 
+    /// Bu helper sistem önerisi dışındaki normal candidate havuzu için kullanılır.
+    /// </summary>
+    private static IReadOnlyList<QuizQuestionCandidate> SelectDifficultFirst(
         IReadOnlyList<QuizQuestionCandidate> candidates,
         int requestedQuestionCount)
     {
@@ -50,8 +120,6 @@ internal static class QuizQuestionCandidateSelector
         var regularCandidates = Shuffle(
             candidates.Where(candidate => !candidate.IsDifficult));
 
-        // Difficult item yoksa eski davranışı koruruz:
-        // tüm adaylar arasından rastgele seçim.
         if (difficultCandidates.Count == 0)
         {
             return Shuffle(candidates)
@@ -59,13 +127,6 @@ internal static class QuizQuestionCandidateSelector
                 .ToArray();
         }
 
-        // Soru sayısının yaklaşık yarısını difficult itemlardan seçmeye çalışıyoruz.
-        //
-        // Örnek:
-        // 5 soru istenirse difficult quota 3 olur.
-        // 4 soru istenirse difficult quota 2 olur.
-        //
-        // Math.Max(1, ...) sayesinde difficult varsa en az 1 difficult soru gelmeye çalışır.
         var difficultQuota = Math.Max(
             1,
             (int)Math.Ceiling(actualQuestionCount * 0.5));
@@ -80,8 +141,6 @@ internal static class QuizQuestionCandidateSelector
             .Take(remainingQuestionCount)
             .ToList();
 
-        // Eğer normal adaylar kalan soru sayısını dolduramazsa,
-        // kalan hakkı henüz seçilmemiş difficult adaylardan tamamlarız.
         var stillNeededQuestionCount =
             actualQuestionCount
             - selectedDifficultCandidates.Count
@@ -95,8 +154,6 @@ internal static class QuizQuestionCandidateSelector
                     .Take(stillNeededQuestionCount));
         }
 
-        // Son listeyi tekrar karıştırıyoruz.
-        // Böylece response içinde Difficult itemlar blok halinde üstte görünmez.
         return Shuffle(selectedDifficultCandidates.Concat(selectedRegularCandidates))
             .Take(actualQuestionCount)
             .ToArray();
