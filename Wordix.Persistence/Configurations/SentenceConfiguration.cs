@@ -47,6 +47,14 @@ public class SentenceConfiguration : IEntityTypeConfiguration<Sentence>
             .HasMaxLength(200)
             .IsRequired(false);
 
+        builder.Property(sentence => sentence.ContentSource)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(sentence => sentence.QualityStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
         // Bir Sentence öğrenilebilir içerik olarak kullanılıyorsa
         // en fazla bir LearningItem'a bağlı olmalıdır.
         //
@@ -76,6 +84,13 @@ public class SentenceConfiguration : IEntityTypeConfiguration<Sentence>
 
         // Dış provider id'si varsa ileride import tekrarlarını yakalamak için işe yarar.
         builder.HasIndex(sentence => sentence.ExternalSentenceId);
+
+        // Cümlelerin gerçek kaynağına göre filtreleme için kullanılır.
+        // Örnek: Tatoeba cümleleri, UserInput cümleleri.
+        builder.HasIndex(sentence => sentence.ContentSource);
+
+        // Review/admin ekranında NeedsReview cümleleri listelemek için kullanılır.
+        builder.HasIndex(sentence => sentence.QualityStatus);
 
         // Sentence, opsiyonel olarak LearningItem'a bağlanır.
         //

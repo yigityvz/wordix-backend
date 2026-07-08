@@ -100,6 +100,181 @@ namespace Wordix.Persistence.Migrations
                     b.ToTable("DeckItems", (string)null);
                 });
 
+            modelBuilder.Entity("Wordix.Domain.Entities.ExternalContentCache", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CacheKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("CachedPayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ContentSource")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("HitCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("LastAccessedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("NormalizedInput")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OperationName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ProviderType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceLanguageCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetLanguageCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CacheKey")
+                        .IsUnique();
+
+                    b.HasIndex("ExpiresAt");
+
+                    b.HasIndex("HitCount");
+
+                    b.HasIndex("NormalizedInput");
+
+                    b.HasIndex("ProviderName");
+
+                    b.HasIndex("ProviderType");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("SourceLanguageCode", "TargetLanguageCode");
+
+                    b.HasIndex("ProviderName", "OperationName", "CacheKey");
+
+                    b.ToTable("ExternalContentCaches", (string)null);
+                });
+
+            modelBuilder.Entity("Wordix.Domain.Entities.ImportJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedCount")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("DryRun")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("FailedCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("FinishedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("JobType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ProcessedRows")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SkippedCount")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceFileName")
+                        .HasMaxLength(255)
+                        .HasColumnType("nvarchar(255)");
+
+                    b.Property<string>("SourceName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("SourceVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SummaryMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("TotalRows")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TriggeredByKeycloakUserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("UpdatedCount")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("DryRun");
+
+                    b.HasIndex("JobType");
+
+                    b.HasIndex("SourceName");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("TriggeredByKeycloakUserId");
+
+                    b.HasIndex("JobType", "Status", "CreatedAt");
+
+                    b.ToTable("ImportJobs", (string)null);
+                });
+
             modelBuilder.Entity("Wordix.Domain.Entities.Language", b =>
                 {
                     b.Property<Guid>("Id")
@@ -167,11 +342,21 @@ namespace Wordix.Persistence.Migrations
                     b.Property<int>("CefrLevel")
                         .HasColumnType("int");
 
+                    b.Property<int>("ContentSource")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("DifficultyGroup")
                         .HasColumnType("int");
+
+                    b.Property<string>("ExternalSourceKey")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime?>("ImportedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -182,6 +367,9 @@ namespace Wordix.Persistence.Migrations
                     b.Property<Guid>("LanguageId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
+
                     b.Property<int>("SourceType")
                         .HasColumnType("int");
 
@@ -190,9 +378,15 @@ namespace Wordix.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContentSource");
+
                     b.HasIndex("DifficultyGroup");
 
+                    b.HasIndex("ExternalSourceKey");
+
                     b.HasIndex("IsActive");
+
+                    b.HasIndex("QualityStatus");
 
                     b.HasIndex("LanguageId", "ItemType");
 
@@ -203,35 +397,85 @@ namespace Wordix.Persistence.Migrations
                         {
                             Id = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"),
                             CefrLevel = 3,
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DifficultyGroup = 2,
                             IsActive = true,
                             ItemType = 1,
                             LanguageId = new Guid("11111111-1111-1111-1111-111111111111"),
+                            QualityStatus = 1,
                             SourceType = 1
                         },
                         new
                         {
                             Id = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"),
                             CefrLevel = 2,
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DifficultyGroup = 1,
                             IsActive = true,
                             ItemType = 1,
                             LanguageId = new Guid("11111111-1111-1111-1111-111111111111"),
+                            QualityStatus = 1,
                             SourceType = 1
                         },
                         new
                         {
                             Id = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"),
                             CefrLevel = 3,
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DifficultyGroup = 2,
                             IsActive = true,
                             ItemType = 1,
                             LanguageId = new Guid("11111111-1111-1111-1111-111111111111"),
+                            QualityStatus = 1,
                             SourceType = 1
                         });
+                });
+
+            modelBuilder.Entity("Wordix.Domain.Entities.LearningItemExampleSentence", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("DisplayOrder")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("LearningItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SentenceId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SentenceTranslationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LearningItemId")
+                        .IsUnique()
+                        .HasFilter("[IsPrimary] = 1");
+
+                    b.HasIndex("SentenceId");
+
+                    b.HasIndex("SentenceTranslationId");
+
+                    b.HasIndex("LearningItemId", "DisplayOrder");
+
+                    b.HasIndex("LearningItemId", "SentenceId")
+                        .IsUnique();
+
+                    b.ToTable("LearningItemExampleSentences", (string)null);
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.LearningProgressHistory", b =>
@@ -351,6 +595,9 @@ namespace Wordix.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<int>("ContentSource")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -363,6 +610,10 @@ namespace Wordix.Persistence.Migrations
                     b.Property<Guid>("LearningItemId")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<string>("License")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
                     b.Property<string>("MeaningText")
                         .IsRequired()
                         .HasMaxLength(300)
@@ -372,9 +623,16 @@ namespace Wordix.Persistence.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
+
                     b.Property<string>("ShortDefinition")
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("SourceProvider")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<Guid>("TargetLanguageId")
                         .HasColumnType("uniqueidentifier");
@@ -383,6 +641,12 @@ namespace Wordix.Persistence.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ContentSource");
+
+                    b.HasIndex("QualityStatus");
+
+                    b.HasIndex("SourceProvider");
 
                     b.HasIndex("TargetLanguageId");
 
@@ -397,39 +661,48 @@ namespace Wordix.Persistence.Migrations
                         {
                             Id = new Guid("cccccccc-cccc-cccc-cccc-ccccccccccc1"),
                             Category = "general",
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayOrder = 1,
                             IsPrimary = true,
                             LearningItemId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1"),
                             MeaningText = "başarmak",
                             PartOfSpeech = "verb",
+                            QualityStatus = 1,
                             ShortDefinition = "Bir hedefe ulaşmak veya istenen sonucu elde etmek.",
+                            SourceProvider = "PrototypeSeed",
                             TargetLanguageId = new Guid("22222222-2222-2222-2222-222222222222")
                         },
                         new
                         {
                             Id = new Guid("cccccccc-cccc-cccc-cccc-ccccccccccc2"),
                             Category = "general",
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayOrder = 1,
                             IsPrimary = true,
                             LearningItemId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2"),
                             MeaningText = "mükemmel",
                             PartOfSpeech = "adjective",
+                            QualityStatus = 1,
                             ShortDefinition = "Eksiksiz, kusursuz veya çok iyi olan.",
+                            SourceProvider = "PrototypeSeed",
                             TargetLanguageId = new Guid("22222222-2222-2222-2222-222222222222")
                         },
                         new
                         {
                             Id = new Guid("cccccccc-cccc-cccc-cccc-ccccccccccc3"),
                             Category = "general",
+                            ContentSource = 1,
                             CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             DisplayOrder = 1,
                             IsPrimary = true,
                             LearningItemId = new Guid("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3"),
                             MeaningText = "geliştirmek",
                             PartOfSpeech = "verb",
+                            QualityStatus = 1,
                             ShortDefinition = "Bir şeyi daha iyi hale getirmek.",
+                            SourceProvider = "PrototypeSeed",
                             TargetLanguageId = new Guid("22222222-2222-2222-2222-222222222222")
                         });
                 });
@@ -471,6 +744,104 @@ namespace Wordix.Persistence.Migrations
                     b.HasIndex("PhraseType");
 
                     b.ToTable("Phrases", (string)null);
+                });
+
+            modelBuilder.Entity("Wordix.Domain.Entities.ProviderRequestLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("DurationMs")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ErrorCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("HttpStatusCode")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("ImportJobId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("KeycloakUserId")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<Guid?>("LearningItemId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("NormalizedInput")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("OperationName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ProviderType")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestKey")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("SourceLanguageCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetLanguageCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("WasServedFromCache")
+                        .HasColumnType("bit");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("HttpStatusCode");
+
+                    b.HasIndex("ImportJobId");
+
+                    b.HasIndex("KeycloakUserId");
+
+                    b.HasIndex("LearningItemId");
+
+                    b.HasIndex("ProviderName");
+
+                    b.HasIndex("ProviderType");
+
+                    b.HasIndex("RequestKey");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("WasServedFromCache");
+
+                    b.HasIndex("ProviderName", "OperationName", "Status", "CreatedAt");
+
+                    b.ToTable("ProviderRequestLogs", (string)null);
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.QuizAnswer", b =>
@@ -757,6 +1128,9 @@ namespace Wordix.Persistence.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<int>("ContentSource")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -779,6 +1153,9 @@ namespace Wordix.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
+
                     b.Property<string>("SourceProvider")
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
@@ -793,11 +1170,15 @@ namespace Wordix.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContentSource");
+
                     b.HasIndex("ExternalSentenceId");
 
                     b.HasIndex("LearningItemId")
                         .IsUnique()
                         .HasFilter("[LearningItemId] IS NOT NULL");
+
+                    b.HasIndex("QualityStatus");
 
                     b.HasIndex("SourceProvider");
 
@@ -811,6 +1192,9 @@ namespace Wordix.Persistence.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ContentSource")
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
@@ -829,6 +1213,9 @@ namespace Wordix.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int>("QualityStatus")
+                        .HasColumnType("int");
 
                     b.Property<string>("SourceProvider")
                         .HasMaxLength(100)
@@ -850,7 +1237,11 @@ namespace Wordix.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ContentSource");
+
                     b.HasIndex("IsPrimary");
+
+                    b.HasIndex("QualityStatus");
 
                     b.HasIndex("SourceProvider");
 
@@ -1150,6 +1541,26 @@ namespace Wordix.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Wordix.Domain.Entities.LearningItemExampleSentence", b =>
+                {
+                    b.HasOne("Wordix.Domain.Entities.LearningItem", null)
+                        .WithMany()
+                        .HasForeignKey("LearningItemId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Wordix.Domain.Entities.Sentence", null)
+                        .WithMany()
+                        .HasForeignKey("SentenceId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("Wordix.Domain.Entities.SentenceTranslation", null)
+                        .WithMany()
+                        .HasForeignKey("SentenceTranslationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+                });
+
             modelBuilder.Entity("Wordix.Domain.Entities.LearningProgressHistory", b =>
                 {
                     b.HasOne("Wordix.Domain.Entities.UserLearningProgress", null)
@@ -1201,6 +1612,19 @@ namespace Wordix.Persistence.Migrations
                         .HasForeignKey("Wordix.Domain.Entities.Phrase", "LearningItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Wordix.Domain.Entities.ProviderRequestLog", b =>
+                {
+                    b.HasOne("Wordix.Domain.Entities.ImportJob", null)
+                        .WithMany()
+                        .HasForeignKey("ImportJobId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("Wordix.Domain.Entities.LearningItem", null)
+                        .WithMany()
+                        .HasForeignKey("LearningItemId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("Wordix.Domain.Entities.QuizAnswer", b =>

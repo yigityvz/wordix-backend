@@ -1,4 +1,5 @@
 ﻿using Wordix.Domain.Common;
+using Wordix.Domain.Enums;
 
 namespace Wordix.Domain.Entities;
 
@@ -46,7 +47,9 @@ public class Sentence : AuditableEntity
         string normalizedText,
         string? externalSentenceId = null,
         string? sourceProvider = null,
-        string? license = null)
+        string? license = null,
+        ContentSource contentSource = ContentSource.Unknown,
+        ContentQualityStatus qualityStatus = ContentQualityStatus.Unknown)
     {
         if (learningItemId == Guid.Empty)
         {
@@ -88,6 +91,8 @@ public class Sentence : AuditableEntity
         License = string.IsNullOrWhiteSpace(license)
             ? null
             : license.Trim();
+        ContentSource = contentSource;
+        QualityStatus = qualityStatus;
     }
 
     /// <summary>
@@ -150,6 +155,27 @@ public class Sentence : AuditableEntity
     /// </summary>
     public string? License { get; private set; }
 
+
+    /// <summary>
+    /// Sentence verisinin gerçek kaynağını gösterir.
+    /// 
+    /// Örnek:
+    /// - Tatoeba
+    /// - UserInput
+    /// - SystemGenerated
+    /// </summary>
+    public ContentSource ContentSource { get; private set; } = ContentSource.Unknown;
+
+    /// <summary>
+    /// Sentence verisinin kalite/güven durumunu gösterir.
+    /// 
+    /// Örnek:
+    /// - Tatoeba'dan gelen sentence için Imported
+    /// - Kullanıcının kendi yazdığı sentence için Verified veya UserInput kabul edilebilir
+    /// - Sistem generated sentence için NeedsReview
+    /// </summary>
+    public ContentQualityStatus QualityStatus { get; private set; } = ContentQualityStatus.Unknown;
+
     /// <summary>
     /// LearningItem bağlantısı olmayan bir sentence'i öğrenilebilir içerik haline getirir.
     /// 
@@ -185,7 +211,9 @@ public class Sentence : AuditableEntity
     public void UpdateSourceMetadata(
         string? externalSentenceId,
         string? sourceProvider,
-        string? license)
+        string? license,
+        ContentSource contentSource,
+        ContentQualityStatus qualityStatus)
     {
         ExternalSentenceId = string.IsNullOrWhiteSpace(externalSentenceId)
             ? null
@@ -199,6 +227,27 @@ public class Sentence : AuditableEntity
             ? null
             : license.Trim();
 
+        ContentSource = contentSource;
+        QualityStatus = qualityStatus;
+
         MarkAsUpdated();
+    }
+
+
+    /// <summary>
+    /// Eski çağrılarla uyumluluk için provider metadata günceller.
+    /// ContentSource ve QualityStatus değerlerini değiştirmez.
+    /// </summary>
+    public void UpdateSourceMetadata(
+        string? externalSentenceId,
+        string? sourceProvider,
+        string? license)
+    {
+        UpdateSourceMetadata(
+            externalSentenceId,
+            sourceProvider,
+            license,
+            ContentSource,
+            QualityStatus);
     }
 }

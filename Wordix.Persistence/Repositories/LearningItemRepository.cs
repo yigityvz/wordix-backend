@@ -3,6 +3,7 @@ using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Common.Models.Persistence;
 using Wordix.Domain.Enums;
 using Wordix.Persistence.Contexts;
+using Wordix.Application.Common.Models.Import;
 
 namespace Wordix.Persistence.Repositories;
 
@@ -229,6 +230,193 @@ public class LearningItemRepository : ILearningItemRepository
                   && learningItem.ItemType == LearningItemType.Phrase
             select phrase.Id)
             .AnyAsync(cancellationToken);
+    }
+
+
+    /// <summary>
+    /// Meaning enrichment için Word + LearningItem + Language join'i yapar.
+    /// 
+    /// Bu method neden Persistence katmanında?
+    /// - EF Core ve DbContext kullanır.
+    /// - Join ve query optimizasyonu teknik veri erişim detaylarıdır.
+    /// - Application katmanı sadece dönen MeaningEnrichmentWordMatch modelini görür.
+    /// </summary>
+    public async Task<IReadOnlyCollection<MeaningEnrichmentWordMatch>> GetMeaningEnrichmentWordMatchesAsync(
+        string sourceLanguageCode,
+        IReadOnlyCollection<string> normalizedTexts,
+        IReadOnlyCollection<ContentSource> allowedContentSources,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceLanguageCode) ||
+            normalizedTexts.Count == 0 ||
+            allowedContentSources.Count == 0)
+        {
+            return Array.Empty<MeaningEnrichmentWordMatch>();
+        }
+
+        var normalizedLanguageCode = sourceLanguageCode.Trim().ToLowerInvariant();
+
+        // EF Core Contains sorgusunu SQL IN'e çevirir.
+        // Service tarafında bu method küçük chunk'larla çağrılacak.
+        var normalizedTextArray = normalizedTexts
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToArray();
+
+        var allowedSourceArray = allowedContentSources
+            .Distinct()
+            .ToArray();
+
+        if (normalizedTextArray.Length == 0 ||
+            allowedSourceArray.Length == 0)
+        {
+            return Array.Empty<MeaningEnrichmentWordMatch>();
+        }
+
+        var matches = await (
+            from word in _dbContext.Words.AsNoTracking()
+            join learningItem in _dbContext.LearningItems.AsNoTracking()
+                on word.LearningItemId equals learningItem.Id
+            join language in _dbContext.Languages.AsNoTracking()
+                on learningItem.LanguageId equals language.Id
+            where learningItem.ItemType == LearningItemType.Word
+                  && learningItem.IsActive
+                  && language.IsActive
+                  && language.Code == normalizedLanguageCode
+                  && normalizedTextArray.Contains(word.NormalizedText)
+                  && allowedSourceArray.Contains(learningItem.ContentSource)
+            select new MeaningEnrichmentWordMatch
+            {
+                LearningItemId = learningItem.Id,
+                WordId = word.Id,
+                NormalizedText = word.NormalizedText,
+                PartOfSpeech = word.PartOfSpeech,
+                LanguageId = learningItem.LanguageId
+            })
+            .ToListAsync(cancellationToken);
+
+        return matches;
+    }
+
+
+    /// <summary>
+    /// Example sentence enrichment için aktif Word/Phrase LearningItem adaylarını getirir.
+    /// 
+    /// Bu method neden burada?
+    /// - Word ve Phrase entity'leri dil bilgisini doğrudan taşımaz.
+    /// - Dil bilgisi LearningItem üzerinde tutulur.
+    /// - Language.Code ile filtrelemek için LearningItem + Language join gerekir.
+    /// - Word/Phrase metinleri ayrı tablolardan gelir.
+    /// 
+    /// Application katmanı sadece ExampleSentenceLearningItemCandidate modelini görür.
+    /// EF Core join detayı Persistence katmanında kalır.
+    /// </summary>
+    public async Task<IReadOnlyCollection<ExampleSentenceLearningItemCandidate>> GetExampleSentenceLearningItemCandidatesAsync(
+        string sourceLanguageCode,
+        IReadOnlyCollection<LearningItemType> allowedItemTypes,
+        IReadOnlyCollection<ContentSource> allowedContentSources,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(sourceLanguageCode) ||
+            allowedItemTypes.Count == 0 ||
+            allowedContentSources.Count == 0)
+        {
+            return Array.Empty<ExampleSentenceLearningItemCandidate>();
+        }
+
+        var normalizedLanguageCode = sourceLanguageCode.Trim().ToLowerInvariant();
+
+        var allowedItemTypeArray = allowedItemTypes
+            .Distinct()
+            .ToArray();
+
+        var allowedSourceArray = allowedContentSources
+            .Distinct()
+            .ToArray();
+
+        if (allowedItemTypeArray.Length == 0 || allowedSourceArray.Length == 0)
+        {
+            return Array.Empty<ExampleSentenceLearningItemCandidate>();
+        }
+
+        var candidates = new List<ExampleSentenceLearningItemCandidate>();
+
+        // Word adayları:
+        // LearningItem + Word + Language join yapıyoruz.
+        if (allowedItemTypeArray.Contains(LearningItemType.Word))
+        {
+            var wordCandidates = await (
+                from word in _dbContext.Words.AsNoTracking()
+                join learningItem in _dbContext.LearningItems.AsNoTracking()
+                    on word.LearningItemId equals learningItem.Id
+                join language in _dbContext.Languages.AsNoTracking()
+                    on learningItem.LanguageId equals language.Id
+                where learningItem.ItemType == LearningItemType.Word
+                      && learningItem.IsActive
+                      && language.IsActive
+                      && language.Code == normalizedLanguageCode
+                      && allowedSourceArray.Contains(learningItem.ContentSource)
+                      && !string.IsNullOrWhiteSpace(word.NormalizedText)
+                select new ExampleSentenceLearningItemCandidate
+                {
+                    LearningItemId = learningItem.Id,
+                    ItemType = learningItem.ItemType,
+                    ContentId = word.Id,
+                    Text = word.Text,
+                    NormalizedText = word.NormalizedText,
+                    LanguageId = learningItem.LanguageId,
+                    LanguageCode = language.Code,
+                    ContentSource = learningItem.ContentSource,
+                    QualityStatus = learningItem.QualityStatus
+                })
+                .ToListAsync(cancellationToken);
+
+            candidates.AddRange(wordCandidates);
+        }
+
+        // Phrase adayları:
+        // Tatoeba cümlesinde phrase geçiyorsa örnek cümle bağlayabiliriz.
+        if (allowedItemTypeArray.Contains(LearningItemType.Phrase))
+        {
+            var phraseCandidates = await (
+                from phrase in _dbContext.Phrases.AsNoTracking()
+                join learningItem in _dbContext.LearningItems.AsNoTracking()
+                    on phrase.LearningItemId equals learningItem.Id
+                join language in _dbContext.Languages.AsNoTracking()
+                    on learningItem.LanguageId equals language.Id
+                where learningItem.ItemType == LearningItemType.Phrase
+                      && learningItem.IsActive
+                      && language.IsActive
+                      && language.Code == normalizedLanguageCode
+                      && allowedSourceArray.Contains(learningItem.ContentSource)
+                      && !string.IsNullOrWhiteSpace(phrase.NormalizedText)
+                select new ExampleSentenceLearningItemCandidate
+                {
+                    LearningItemId = learningItem.Id,
+                    ItemType = learningItem.ItemType,
+                    ContentId = phrase.Id,
+                    Text = phrase.Text,
+                    NormalizedText = phrase.NormalizedText,
+                    LanguageId = learningItem.LanguageId,
+                    LanguageCode = language.Code,
+                    ContentSource = learningItem.ContentSource,
+                    QualityStatus = learningItem.QualityStatus
+                })
+                .ToListAsync(cancellationToken);
+
+            candidates.AddRange(phraseCandidates);
+        }
+
+        return candidates
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.NormalizedText))
+            .GroupBy(candidate => new
+            {
+                candidate.LearningItemId,
+                candidate.ItemType
+            })
+            .Select(group => group.First())
+            .ToArray();
     }
 
 }

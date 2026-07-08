@@ -38,6 +38,21 @@ public class LearningItemConfiguration : IEntityTypeConfiguration<LearningItem>
             .HasConversion<int>()
             .IsRequired();
 
+        builder.Property(item => item.ContentSource)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(item => item.QualityStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(item => item.ExternalSourceKey)
+            .HasMaxLength(200)
+            .IsRequired(false);
+
+        builder.Property(item => item.ImportedAt)
+            .IsRequired(false);
+
         builder.Property(item => item.IsActive)
             .IsRequired();
 
@@ -49,6 +64,18 @@ public class LearningItemConfiguration : IEntityTypeConfiguration<LearningItem>
         builder.HasIndex(item => item.DifficultyGroup);
 
         builder.HasIndex(item => item.IsActive);
+
+        // İçeriğin gerçek kaynağına göre filtreleme/import analizleri için kullanılır.
+        // Örnek: CefrJ kaynaklı içerikler, LibreTranslate kaynaklı içerikler.
+        builder.HasIndex(item => item.ContentSource);
+
+        // Review/admin ekranlarında kalite durumuna göre filtreleme yapılabilir.
+        // Örnek: NeedsReview içerikleri listele.
+        builder.HasIndex(item => item.QualityStatus);
+
+        // Import tekrarlarını yakalamak için kullanılabilir.
+        // Örnek: CEFR-J source key veya provider external key.
+        builder.HasIndex(item => item.ExternalSourceKey);
 
         // LearningItem bir dile bağlıdır.
         // Dil silinirse ona bağlı içerikleri otomatik silmek istemeyiz.

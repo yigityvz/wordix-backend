@@ -80,6 +80,9 @@ public static class LookupMapper
             SourceLanguageCode = sourceLanguage.Code,
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = DatabaseLookupSource,
+            ContentSource = databaseLookupData.LearningItem.ContentSource.ToString(),
+            QualityStatus = databaseLookupData.LearningItem.QualityStatus.ToString(),
+            SourceType = databaseLookupData.LearningItem.SourceType.ToString(),
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
             Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings),
             SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
@@ -117,6 +120,9 @@ public static class LookupMapper
             SourceLanguageCode = sourceLanguage.Code,
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = DatabaseLookupSource,
+            ContentSource = databaseLookupData.LearningItem.ContentSource.ToString(),
+            QualityStatus = databaseLookupData.LearningItem.QualityStatus.ToString(),
+            SourceType = databaseLookupData.LearningItem.SourceType.ToString(),
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
             Meanings = ToLookupMeaningResponses(databaseLookupData.Meanings),
             SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
@@ -164,6 +170,9 @@ public static class LookupMapper
             SourceLanguageCode = sourceLanguage.Code,
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = providerResult.ProviderName,
+            ContentSource = learningItem.ContentSource.ToString(),
+            QualityStatus = learningItem.QualityStatus.ToString(),
+            SourceType = learningItem.SourceType.ToString(),
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
             Meanings = ToLookupMeaningResponses(meanings),
             SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
@@ -211,6 +220,9 @@ public static class LookupMapper
             SourceLanguageCode = sourceLanguage.Code,
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = providerResult.ProviderName,
+            ContentSource = learningItem.ContentSource.ToString(),
+            QualityStatus = learningItem.QualityStatus.ToString(),
+            SourceType = learningItem.SourceType.ToString(),
             IsAlreadyInUserDictionary = isAlreadyInUserDictionary,
             Meanings = ToLookupMeaningResponses(meanings),
             SentenceTranslations = Array.Empty<LookupSentenceTranslationResponse>()
@@ -253,6 +265,9 @@ public static class LookupMapper
             SourceLanguageCode = sourceLanguage.Code,
             TargetLanguageCode = targetLanguage.Code,
             LookupSource = providerResult.ProviderName,
+            ContentSource = providerResult.ContentSource.ToString(),
+            QualityStatus = providerResult.QualityStatus.ToString(),
+            SourceType = LearningItemSourceType.UserLookup.ToString(),
             IsAlreadyInUserDictionary = false,
             Meanings = Array.Empty<LookupMeaningResponse>(),
             SentenceTranslations = ToLookupSentenceTranslationResponses(providerResult.SentenceTranslations)
@@ -282,7 +297,7 @@ public static class LookupMapper
     /// Tek bir Meaning entity'sini LookupMeaningResponse DTO'suna dönüştürür.
     /// </summary>
     public static LookupMeaningResponse ToLookupMeaningResponse(
-        Meaning meaning)
+    Meaning meaning)
     {
         ArgumentNullException.ThrowIfNull(meaning);
 
@@ -292,7 +307,10 @@ public static class LookupMapper
             Translation = meaning.MeaningText,
             Definition = meaning.ShortDefinition,
             ExampleSentence = null,
-            PartOfSpeech = meaning.PartOfSpeech
+            PartOfSpeech = meaning.PartOfSpeech,
+            ContentSource = meaning.ContentSource.ToString(),
+            QualityStatus = meaning.QualityStatus.ToString(),
+            SourceProvider = meaning.SourceProvider
         };
     }
 

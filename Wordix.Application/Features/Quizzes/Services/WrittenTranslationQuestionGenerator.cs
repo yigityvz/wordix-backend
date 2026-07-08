@@ -91,8 +91,10 @@ public sealed class WrittenTranslationQuestionGenerator : IQuizQuestionGenerator
                 CorrectMeaningId = candidate.CorrectMeaningId,
                 CorrectAnswerText = candidate.CorrectAnswerText.Trim(),
 
-                // Writing quizde seçenek yoktur.
-                // Kullanıcı cevabı kendisi yazar.
+                IsSystemRecommended = candidate.IsSystemRecommended,
+                RecommendationReason = candidate.RecommendationReason,
+                DifficultyGroup = candidate.DifficultyGroup,
+
                 Options = Array.Empty<GeneratedQuizOption>()
             })
             .ToArray();
@@ -119,13 +121,30 @@ public sealed class WrittenTranslationQuestionGenerator : IQuizQuestionGenerator
 
         return candidates
             .Where(candidate =>
-                candidate.UserLearningItemId != Guid.Empty
+                IsValidCandidateOwner(candidate)
                 && candidate.LearningItemId != Guid.Empty
                 && !string.IsNullOrWhiteSpace(candidate.QuestionText)
                 && !string.IsNullOrWhiteSpace(candidate.CorrectAnswerText))
             .GroupBy(candidate => candidate.LearningItemId)
             .Select(group => group.First())
             .ToArray();
+    }
+
+    /// <summary>
+    /// Candidate'ın quiz sorusu üretmek için geçerli bir sahiplik bilgisi taşıyıp taşımadığını kontrol eder.
+    /// 
+    /// Normal UserDictionary/Deck candidate:
+    /// - UserLearningItemId dolu olmalıdır.
+    /// 
+    /// System recommendation candidate:
+    /// - Kullanıcının dictionary'sinden gelmediği için UserLearningItemId boş olabilir.
+    /// - Bu durumda IsSystemRecommended = true olması yeterlidir.
+    /// </summary>
+    private static bool IsValidCandidateOwner(
+        QuizQuestionCandidate candidate)
+    {
+        return candidate.UserLearningItemId != Guid.Empty
+               || candidate.IsSystemRecommended;
     }
 
     /// <summary>

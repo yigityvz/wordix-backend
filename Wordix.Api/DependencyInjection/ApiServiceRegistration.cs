@@ -48,7 +48,7 @@ public static class ApiServiceRegistration
 
         // Infrastructure katmanını ekler.
         // CurrentUserService gibi teknik implementasyonlar burada register edilir.
-        services.AddWordixInfrastructure();
+        services.AddWordixInfrastructure(configuration);
 
         return services;
     }

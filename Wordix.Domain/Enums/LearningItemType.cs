@@ -8,6 +8,9 @@ namespace Wordix.Domain.Enums;
 /// </summary>
 public enum LearningItemType
 {
+
+    Unknown = 0,
+
     /// <summary>
     /// Tekil kelime.
     /// Örnek: achieve, improve, struggle

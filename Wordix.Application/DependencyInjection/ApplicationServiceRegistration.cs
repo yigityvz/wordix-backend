@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Wordix.Application.Common.Behaviors;
 using Wordix.Application.Features.Lookups.Services;
 using Wordix.Application.Features.Quizzes.Services;
+using Wordix.Application.Common.Interfaces.Import;
+using Wordix.Application.Features.Imports.Services;
 
 namespace Wordix.Application.DependencyInjection;
 
@@ -36,6 +38,29 @@ public static class ApplicationServiceRegistration
         // FluentValidation registration:
         // Application assembly içindeki AbstractValidator<T> implementasyonlarını tarar ve DI'a ekler.
         services.AddValidatorsFromAssembly(typeof(ApplicationServiceRegistration).Assembly);
+
+        // Meaning enrichment service kaydı.
+        //
+        // Bu service Kaikki/Wiktionary parser'dan gelen meaning satırlarını
+        // DB'deki mevcut LearningItem/Word kayıtlarıyla eşleştirir.
+        // Application katmanında kalır çünkü repository interface'leri üzerinden çalışır,
+        // DbContext bilmez.
+        services.AddScoped<IMeaningEnrichmentService, MeaningEnrichmentService>();
+
+        // Provider-created phrase creation service kaydı.
+        //
+        // Bu service Azure gibi provider'lardan gelen phrase sonucunu
+        // global LearningItem + Phrase + Meaning catalog yapısına kaydeder.
+        // 24L'de lookup fallback akışına bağlanacaktır.
+        services.AddScoped<IProviderPhraseCreationService, ProviderPhraseCreationService>();
+
+        services.AddScoped<IExampleSentenceEnrichmentService, ExampleSentenceEnrichmentService>();
+
+        services.AddScoped<IImportJobService, ImportJobService>();
+
+        services.AddScoped<IProviderRequestLogService, ProviderRequestLogService>();
+
+        services.AddScoped<IExternalContentCacheService, ExternalContentCacheService>();
 
         // MediatR pipeline behavior registration:
         //

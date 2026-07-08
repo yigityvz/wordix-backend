@@ -48,6 +48,22 @@ public class MeaningConfiguration : IEntityTypeConfiguration<Meaning>
         builder.Property(meaning => meaning.DisplayOrder)
             .IsRequired();
 
+        builder.Property(meaning => meaning.ContentSource)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(meaning => meaning.QualityStatus)
+            .HasConversion<int>()
+            .IsRequired();
+
+        builder.Property(meaning => meaning.SourceProvider)
+            .HasMaxLength(100)
+            .IsRequired(false);
+
+        builder.Property(meaning => meaning.License)
+            .HasMaxLength(200)
+            .IsRequired(false);
+
         // Bir LearningItem'ın anlamları genelde hedef dil ve görüntüleme sırasına göre çekilecek.
         builder.HasIndex(meaning => new
         {
@@ -63,6 +79,17 @@ public class MeaningConfiguration : IEntityTypeConfiguration<Meaning>
             meaning.TargetLanguageId,
             meaning.IsPrimary
         });
+
+        // Anlamların kaynağına göre analiz yapılabilir.
+        // Örnek: WiktionaryKaikki'den gelen meaning kayıtları.
+        builder.HasIndex(meaning => meaning.ContentSource);
+
+        // Admin/review ekranında NeedsReview anlamları listelemek için kullanılır.
+        builder.HasIndex(meaning => meaning.QualityStatus);
+
+        // Provider bazlı analiz için kullanılır.
+        // Örnek: Kaikki, LibreTranslate.
+        builder.HasIndex(meaning => meaning.SourceProvider);
 
         // Meaning, LearningItem'a bağlıdır.
         // LearningItem silinirse Meaning kayıtları da silinebilir.

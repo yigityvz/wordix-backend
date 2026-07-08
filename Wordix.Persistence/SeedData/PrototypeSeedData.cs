@@ -112,6 +112,19 @@ public static class PrototypeSeedData
                 CefrLevel = CefrLevel.B1,
                 DifficultyGroup = DifficultyGroup.Intermediate,
                 SourceType = LearningItemSourceType.SystemSeed,
+
+                // Faz 24:
+                // Bu kayıtlar eski prototype seed datasıdır.
+                // Provider'dan otomatik gelmedikleri için Manual + Verified kabul ediyoruz.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                // Prototype seed datasında dış kaynak id'si yok.
+                ExternalSourceKey = (string?)null,
+
+                // Bu kayıtlar import job ile gelmediği için null bırakıyoruz.
+                ImportedAt = (DateTime?)null,
+
                 IsActive = true,
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
@@ -124,6 +137,16 @@ public static class PrototypeSeedData
                 CefrLevel = CefrLevel.A2,
                 DifficultyGroup = DifficultyGroup.Beginner,
                 SourceType = LearningItemSourceType.SystemSeed,
+
+                // Faz 24:
+                // Bu kayıtlar eski prototype seed datasıdır.
+                // Provider'dan otomatik gelmedikleri için Manual + Verified kabul ediyoruz.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                ExternalSourceKey = (string?)null,
+                ImportedAt = (DateTime?)null,
+
                 IsActive = true,
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
@@ -136,6 +159,16 @@ public static class PrototypeSeedData
                 CefrLevel = CefrLevel.B1,
                 DifficultyGroup = DifficultyGroup.Intermediate,
                 SourceType = LearningItemSourceType.SystemSeed,
+
+                // Faz 24:
+                // Bu kayıtlar eski prototype seed datasıdır.
+                // Provider'dan otomatik gelmedikleri için Manual + Verified kabul ediyoruz.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                ExternalSourceKey = (string?)null,
+                ImportedAt = (DateTime?)null,
+
                 IsActive = true,
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
@@ -203,6 +236,20 @@ public static class PrototypeSeedData
                 Category = "general",
                 IsPrimary = true,
                 DisplayOrder = 1,
+
+                // Faz 24:
+                // Bu anlamlar eski prototype seed datasıdır.
+                // Otomatik provider üretimi olmadığı için Manual + Verified kabul edilir.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                // Kaynağın okunabilir adı.
+                // İleride Kaikki, LibreTranslate, Tatoeba gibi değerler gelebilecek.
+                SourceProvider = "PrototypeSeed",
+
+                // Prototype seed datası için özel lisans bilgisi yok.
+                License = (string?)null,
+
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
             },
@@ -217,6 +264,16 @@ public static class PrototypeSeedData
                 Category = "general",
                 IsPrimary = true,
                 DisplayOrder = 1,
+
+                // Faz 24:
+                // Bu anlamlar eski prototype seed datasıdır.
+                // Otomatik provider üretimi olmadığı için Manual + Verified kabul edilir.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                SourceProvider = "PrototypeSeed",
+                License = (string?)null,
+
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
             },
@@ -231,6 +288,16 @@ public static class PrototypeSeedData
                 Category = "general",
                 IsPrimary = true,
                 DisplayOrder = 1,
+
+                // Faz 24:
+                // Bu anlamlar eski prototype seed datasıdır.
+                // Otomatik provider üretimi olmadığı için Manual + Verified kabul edilir.
+                ContentSource = ContentSource.Manual,
+                QualityStatus = ContentQualityStatus.Verified,
+
+                SourceProvider = "PrototypeSeed",
+                License = (string?)null,
+
                 CreatedAt = SeedCreatedAt,
                 UpdatedAt = (DateTime?)null
             });

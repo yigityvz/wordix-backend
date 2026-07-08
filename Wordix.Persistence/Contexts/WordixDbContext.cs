@@ -86,6 +86,18 @@ public class WordixDbContext : DbContext
 
 
     /// <summary>
+    /// Word/Phrase LearningItem kayıtları ile örnek Sentence kayıtları arasındaki bağlantıyı tutar.
+    /// 
+    /// Bu tablo sayesinde:
+    /// - Bir kelimenin örnek cümlesi gösterilebilir.
+    /// - Bir phrase'in örnek cümlesi gösterilebilir.
+    /// - Sentence kendi başına LearningItem olmak zorunda kalmadan örnek cümle olarak kullanılabilir.
+    /// </summary>
+    public DbSet<LearningItemExampleSentence> LearningItemExampleSentences
+        => Set<LearningItemExampleSentence>();
+
+
+    /// <summary>
     /// Word veya ileride Phrase anlamlarını tutar.
     /// </summary>
     public DbSet<Meaning> Meanings => Set<Meaning>();
@@ -156,6 +168,12 @@ public class WordixDbContext : DbContext
     /// Quiz oturumundaki soruları tutar.
     /// </summary>
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
+
+    public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
+
+    public DbSet<ProviderRequestLog> ProviderRequestLogs => Set<ProviderRequestLog>();
+
+    public DbSet<ExternalContentCache> ExternalContentCaches => Set<ExternalContentCache>();
 
 
     /// <summary>

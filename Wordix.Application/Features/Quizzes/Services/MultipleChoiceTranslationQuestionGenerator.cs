@@ -131,7 +131,7 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
 
         return candidates
             .Where(candidate =>
-                candidate.UserLearningItemId != Guid.Empty
+                IsValidCandidateOwner(candidate)
                 && candidate.LearningItemId != Guid.Empty
                 && candidate.CorrectMeaningId != Guid.Empty
                 && !string.IsNullOrWhiteSpace(candidate.QuestionText)
@@ -139,6 +139,29 @@ public sealed class MultipleChoiceTranslationQuestionGenerator : IQuizQuestionGe
             .GroupBy(candidate => candidate.LearningItemId)
             .Select(group => group.First())
             .ToArray();
+    }
+
+
+    /// <summary>
+    /// Candidate'ın quiz sorusu üretmek için geçerli bir sahiplik bilgisi taşıyıp taşımadığını kontrol eder.
+    /// 
+    /// Normal UserDictionary/Deck candidate:
+    /// - UserLearningItemId dolu olmalıdır.
+    /// 
+    /// System recommendation candidate:
+    /// - Kullanıcının dictionary'sinden gelmediği için UserLearningItemId boş olabilir.
+    /// - Bu durumda IsSystemRecommended = true olması yeterlidir.
+    /// 
+    /// Bu ayrım neden gerekli?
+    /// - Sistem önerileri global LearningItem havuzundan gelir.
+    /// - Henüz kullanıcının UserLearningItem kaydı yoktur.
+    /// - Eğer UserLearningItemId zorunlu tutulursa tüm sistem önerileri generator'da elenir.
+    /// </summary>
+    private static bool IsValidCandidateOwner(
+        QuizQuestionCandidate candidate)
+    {
+        return candidate.UserLearningItemId != Guid.Empty
+               || candidate.IsSystemRecommended;
     }
 
     /// <summary>

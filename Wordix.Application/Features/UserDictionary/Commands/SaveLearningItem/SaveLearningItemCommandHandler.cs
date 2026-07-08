@@ -128,10 +128,12 @@ public sealed class SaveLearningItemCommandHandler
 
         // 6. SourceLookupHistoryId gönderildiyse bu lookup history current user'a ait mi kontrol ediyoruz.
         // Kullanıcı başkasının lookup history id'sini gönderip ilişki kuramamalı.
-        await EnsureSourceLookupHistoryBelongsToCurrentUserAsync(
-            request.SourceLookupHistoryId,
-            keycloakUserId,
-            cancellationToken);
+        await EnsureSourceLookupHistoryIsValidForLearningItemSaveAsync(
+            sourceLookupHistoryId: request.SourceLookupHistoryId,
+            keycloakUserId: keycloakUserId,
+            learningItemId: learningItem.Id,
+            learningItemType: learningItem.ItemType,
+            cancellationToken: cancellationToken);
 
         // 7. Kullanıcı dictionary kaydı oluşturuyoruz.
         // UserLearningItem artık UserProfileId değil KeycloakUserId alır.
@@ -254,18 +256,22 @@ public sealed class SaveLearningItemCommandHandler
     }
 
     /// <summary>
-    /// SourceLookupHistoryId gönderildiyse bu kaydın current user'a ait olduğunu doğrular.
+    /// SourceLookupHistoryId gönderildiyse bu kaydın current user'a ait olduğunu
+    /// ve kaydedilmek istenen LearningItem ile uyumlu olduğunu doğrular.
     /// 
     /// Neden gerekli?
-    /// Kullanıcı request body içine başka bir kullanıcının LookupHistoryId değerini koymamalı.
-    /// Bu ownership kontrolüdür.
+    /// - Kullanıcı başka bir kullanıcının lookup history id'sini kullanamamalı.
+    /// - Kullanıcı kendi history kayıtlarından yanlış birini de bu save işlemine bağlayamamalı.
     /// 
-    /// Yeni mimaride ownership kontrolü UserProfileId ile değil,
-    /// KeycloakUserId ile yapılır.
+    /// Örnek risk:
+    /// Kullanıcı "microservice" LearningItem'ını kaydederken
+    /// "take responsibility" lookup history id'sini göndermemeli.
     /// </summary>
-    private async Task EnsureSourceLookupHistoryBelongsToCurrentUserAsync(
+    private async Task EnsureSourceLookupHistoryIsValidForLearningItemSaveAsync(
         Guid? sourceLookupHistoryId,
         string keycloakUserId,
+        Guid learningItemId,
+        LearningItemType learningItemType,
         CancellationToken cancellationToken)
     {
         if (sourceLookupHistoryId is null)
@@ -290,5 +296,44 @@ public sealed class SaveLearningItemCommandHandler
             throw new ForbiddenException(
                 "You cannot use another user's lookup history as save source.");
         }
+
+        if (lookupHistory.LearningItemId is null)
+        {
+            throw new BusinessRuleException(
+                "Source lookup history is not linked to a learning item.",
+                "SOURCE_LOOKUP_HISTORY_HAS_NO_LEARNING_ITEM");
+        }
+
+        if (lookupHistory.LearningItemId.Value != learningItemId)
+        {
+            throw new BusinessRuleException(
+                "Source lookup history does not belong to the specified learning item.",
+                "SOURCE_LOOKUP_HISTORY_LEARNING_ITEM_MISMATCH");
+        }
+
+        var expectedInputType = ToExpectedInputType(learningItemType);
+
+        if (lookupHistory.InputType != expectedInputType)
+        {
+            throw new BusinessRuleException(
+                "Source lookup history input type does not match the learning item type.",
+                "SOURCE_LOOKUP_HISTORY_INPUT_TYPE_MISMATCH");
+        }
     }
+
+
+    /// <summary>
+    /// LearningItemType değerini LookupHistory.InputType karşılığına çevirir.
+    /// </summary>
+    private static InputType ToExpectedInputType(LearningItemType learningItemType)
+    {
+        return learningItemType switch
+        {
+            LearningItemType.Word => InputType.Word,
+            LearningItemType.Phrase => InputType.Phrase,
+            LearningItemType.Sentence => InputType.Sentence,
+            _ => InputType.Word
+        };
+    }
+
 }

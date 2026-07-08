@@ -1,4 +1,6 @@
 ﻿using Wordix.Application.Common.Models.Persistence;
+using Wordix.Application.Common.Models.Import;
+using Wordix.Domain.Enums;
 
 namespace Wordix.Application.Common.Interfaces.Persistence;
 
@@ -81,4 +83,37 @@ public interface ILearningItemRepository
         string normalizedText,
         Guid sourceLanguageId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Meaning enrichment için DB'deki mevcut Word + LearningItem eşleşmelerini getirir.
+    /// 
+    /// Neden bu method özel repository'de?
+    /// - Word, LearningItem ve Language tabloları arasında join gerekir.
+    /// - Application service DbContext bilmemelidir.
+    /// - Generic repository bu join senaryosu için yeterli değildir.
+    /// </summary>
+    Task<IReadOnlyCollection<MeaningEnrichmentWordMatch>> GetMeaningEnrichmentWordMatchesAsync(
+        string sourceLanguageCode,
+        IReadOnlyCollection<string> normalizedTexts,
+        IReadOnlyCollection<ContentSource> allowedContentSources,
+        CancellationToken cancellationToken = default);
+
+
+    /// <summary>
+    /// Example sentence enrichment için mevcut aktif Word/Phrase LearningItem adaylarını getirir.
+    /// 
+    /// Bu method Tatoeba gibi dış cümle kaynaklarından gelen örnek cümleleri
+    /// mevcut Word/Phrase içeriklerle eşleştirmek için kullanılır.
+    /// 
+    /// Neden özel repository methodu?
+    /// - LearningItem + Word/Phrase + Language join gerekir.
+    /// - Application katmanı DbContext bilmemelidir.
+    /// - Generic repository bu join senaryosu için yeterli değildir.
+    /// </summary>
+    Task<IReadOnlyCollection<ExampleSentenceLearningItemCandidate>> GetExampleSentenceLearningItemCandidatesAsync(
+        string sourceLanguageCode,
+        IReadOnlyCollection<LearningItemType> allowedItemTypes,
+        IReadOnlyCollection<ContentSource> allowedContentSources,
+        CancellationToken cancellationToken = default);
+
 }

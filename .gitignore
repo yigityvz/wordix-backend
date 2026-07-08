@@ -6,6 +6,31 @@
 # dotenv files
 .env
 
+# Wordix import source data files
+eng-tur.tei
+kaikki*.jsonl
+*.jsonl
+eng_sentences*.tsv
+tur_sentences*.tsv
+links*.csv
+tatoeba*.zip
+
+# Local-only app settings
+**/appsettings.Local.json
+**/appsettings.*.Local.json
+
+# Dictionary/import source files
+*.tei
+*.tgz
+*.tar
+*.tar.gz
+import-data/
+ImportData/
+data/imports/
+
+# Env variants
+.env.*
+
 # User-specific files
 *.rsuser
 *.suo

@@ -11,6 +11,7 @@ using Wordix.Application.Features.Lookups.Services;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
 using Wordix.Application.Features.Lookups.Mappers;
+using Wordix.Application.Common.Constants;
 
 namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 
@@ -191,7 +192,11 @@ public sealed class CreateLookupCommandHandler
         }
 
         // 7. Database'de yoksa provider çağırıyoruz.
-        // Faz 13C'de Infrastructure içinde PrototypeDictionaryProvider ekledik.
+        //
+        // Production mindset:
+        // Bu aşamada handler doğrudan Azure Translator'ı bilmez.
+        // IDictionaryProvider abstraction'ını çağırır.
+        // Infrastructure DI tarafında bu interface AzureTranslationDictionaryProvider'a bağlanır.
         var providerResult = await _dictionaryProvider.FindAsync(
             normalizedText,
             request.SourceLanguageCode,
@@ -207,6 +212,7 @@ public sealed class CreateLookupCommandHandler
                 inputType: inputType,
                 sourceLanguageId: sourceLanguage.Id,
                 targetLanguageId: targetLanguage.Id,
+                providerType: ToNullableProviderType(providerResult.ProviderType),
                 providerName: providerResult.ProviderName,
                 cancellationToken: cancellationToken);
 
@@ -272,6 +278,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: databaseLookupData.LearningItem.Id,
             wasFoundInDatabase: true,
             wasCreatedFromProvider: false,
+            providerType: null,
             providerName: null,
             resultCount: resultCount);
 
@@ -321,6 +328,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: databaseLookupData.LearningItem.Id,
             wasFoundInDatabase: true,
             wasCreatedFromProvider: false,
+            providerType: null,
             providerName: null,
             resultCount: resultCount);
 
@@ -358,25 +366,80 @@ public sealed class CreateLookupCommandHandler
         DictionaryProviderResult providerResult,
         CancellationToken cancellationToken)
     {
-        // İlk prototype provider'da CEFR/Difficulty otomatik tespit etmiyoruz.
-        // Faz 24 import/provider sisteminde bu konu detaylandırılacak.
+
+        // Provider çağrısından sonra duplicate re-check yapıyoruz.
+        //
+        // Neden?
+        // İki kullanıcı aynı anda DB'de olmayan aynı kelimeyi ararsa,
+        // ikisi de ilk DB kontrolünde "yok" görebilir.
+        // Bu yüzden provider sonucu geldikten sonra insert etmeden önce
+        // global word tekrar oluşmuş mu kontrol ediyoruz.
+        //
+        // Eğer artık DB'de varsa yeni kayıt oluşturmak yerine DB sonucunu döneriz.
+        var wordAlreadyExists = await _learningItemRepository.WordExistsAsync(
+            normalizedText,
+            sourceLanguage.Id,
+            cancellationToken);
+
+        if (wordAlreadyExists)
+        {
+            var latestDatabaseLookupData = await _learningItemRepository.GetWordLookupDataAsync(
+                normalizedText,
+                sourceLanguage.Id,
+                targetLanguage.Id,
+                cancellationToken);
+
+            if (latestDatabaseLookupData is not null)
+            {
+                return await HandleWordDatabaseLookupResultAsync(
+                    keycloakUserId: keycloakUserId,
+                    request: request,
+                    normalizedText: normalizedText,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    databaseLookupData: latestDatabaseLookupData,
+                    cancellationToken: cancellationToken);
+            }
+        }
+
+        var contentSource = ResolveProviderContentSource(providerResult);
+        var qualityStatus = ResolveProviderQualityStatus(providerResult);
+        var externalSourceKey = BuildProviderExternalSourceKey(
+            providerResult.ProviderName,
+            "word",
+            normalizedText);
+
         var learningItem = new LearningItem(
             LearningItemType.Word,
             sourceLanguage.Id,
-            CefrLevel.A1,
-            DifficultyGroup.Beginner,
-            LearningItemSourceType.Provider);
+            CefrLevel.Unknown,
+            DifficultyGroup.Unknown,
+            LearningItemSourceType.UserLookup,
+            contentSource,
+            qualityStatus,
+            externalSourceKey,
+            DateTime.UtcNow);
 
-        var primaryProviderMeaning = providerResult.Meanings.First();
+        var primaryProviderMeaning = providerResult.Meanings.FirstOrDefault();
+
+        if (primaryProviderMeaning is null)
+        {
+            throw new BusinessRuleException(
+                "Provider returned a word lookup result without any meaning.",
+                "WORD_PROVIDER_RESULT_EMPTY");
+        }
+
+        var displayText = NormalizeDisplayText(request.Text);
 
         var word = new Word(
             learningItem.Id,
-            normalizedText,
+            displayText,
             normalizedText,
             primaryProviderMeaning.PartOfSpeech,
             pronunciation: null);
 
         var meanings = providerResult.Meanings
+            .Where(providerMeaning => !string.IsNullOrWhiteSpace(providerMeaning.Translation))
             .Select((providerMeaning, index) => new Meaning(
                 learningItem.Id,
                 targetLanguage.Id,
@@ -385,8 +448,19 @@ public sealed class CreateLookupCommandHandler
                 providerMeaning.PartOfSpeech,
                 category: null,
                 isPrimary: index == 0,
-                displayOrder: index + 1))
+                displayOrder: index,
+                contentSource,
+                qualityStatus,
+                providerResult.ProviderName,
+                license: null))
             .ToArray();
+
+        if (meanings.Length == 0)
+        {
+            throw new BusinessRuleException(
+                "Provider returned a word lookup result without any valid meaning.",
+                "WORD_PROVIDER_MEANING_RESULT_EMPTY");
+        }
 
         var lookupHistory = CreateLookupHistory(
             keycloakUserId: keycloakUserId,
@@ -398,6 +472,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: learningItem.Id,
             wasFoundInDatabase: false,
             wasCreatedFromProvider: true,
+            providerType: ToNullableProviderType(providerResult.ProviderType),
             providerName: providerResult.ProviderName,
             resultCount: meanings.Length);
 
@@ -445,22 +520,68 @@ public sealed class CreateLookupCommandHandler
         DictionaryProviderResult providerResult,
         CancellationToken cancellationToken)
     {
-        // İlk phrase provider akışında CEFR/Difficulty otomatik tespit etmiyoruz.
-        // Faz 24 import/provider sisteminde bu konu detaylandırılacak.
+
+        // Provider çağrısından sonra duplicate re-check yapıyoruz.
+        //
+        // Neden?
+        // Aynı phrase iki farklı kullanıcı tarafından aynı anda aranabilir.
+        // İlk DB kontrolünde ikisi de kayıt yok görebilir.
+        // Bu yüzden provider sonucu geldikten sonra insert öncesi tekrar kontrol ediyoruz.
+        //
+        // Eğer phrase artık DB'de varsa yeni kayıt oluşturmak yerine DB sonucunu döneriz.
+        var phraseAlreadyExists = await _learningItemRepository.PhraseExistsAsync(
+            normalizedText,
+            sourceLanguage.Id,
+            cancellationToken);
+
+        if (phraseAlreadyExists)
+        {
+            var latestDatabaseLookupData = await _learningItemRepository.GetPhraseLookupDataAsync(
+                normalizedText,
+                sourceLanguage.Id,
+                targetLanguage.Id,
+                cancellationToken);
+
+            if (latestDatabaseLookupData is not null)
+            {
+                return await HandlePhraseDatabaseLookupResultAsync(
+                    keycloakUserId: keycloakUserId,
+                    request: request,
+                    normalizedText: normalizedText,
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    databaseLookupData: latestDatabaseLookupData,
+                    cancellationToken: cancellationToken);
+            }
+        }
+
+        var contentSource = ResolveProviderContentSource(providerResult);
+        var qualityStatus = ResolveProviderQualityStatus(providerResult);
+        var externalSourceKey = BuildProviderExternalSourceKey(
+            providerResult.ProviderName,
+            "phrase",
+            normalizedText);
+        var displayText = NormalizeDisplayText(request.Text);
+
         var learningItem = new LearningItem(
             LearningItemType.Phrase,
             sourceLanguage.Id,
-            CefrLevel.A1,
-            DifficultyGroup.Beginner,
-            LearningItemSourceType.Provider);
+            CefrLevel.Unknown,
+            DifficultyGroup.Unknown,
+            LearningItemSourceType.UserLookup,
+            contentSource,
+            qualityStatus,
+            externalSourceKey,
+            DateTime.UtcNow);
 
         var phrase = new Phrase(
-            learningItem.Id,
-            normalizedText,
-            normalizedText,
-            PhraseType.Unknown);
+           learningItem.Id,
+           displayText,
+           normalizedText,
+           PhraseType.Unknown);
 
         var meanings = providerResult.Meanings
+            .Where(providerMeaning => !string.IsNullOrWhiteSpace(providerMeaning.Translation))
             .Select((providerMeaning, index) => new Meaning(
                 learningItem.Id,
                 targetLanguage.Id,
@@ -469,8 +590,19 @@ public sealed class CreateLookupCommandHandler
                 providerMeaning.PartOfSpeech,
                 category: null,
                 isPrimary: index == 0,
-                displayOrder: index + 1))
+                displayOrder: index,
+                contentSource,
+                qualityStatus,
+                providerResult.ProviderName,
+                license: null))
             .ToArray();
+
+        if (meanings.Length == 0)
+        {
+            throw new BusinessRuleException(
+                "Provider returned a phrase lookup result without any valid meaning.",
+                "PHRASE_PROVIDER_MEANING_RESULT_EMPTY");
+        }
 
         var lookupHistory = CreateLookupHistory(
             keycloakUserId: keycloakUserId,
@@ -482,6 +614,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: learningItem.Id,
             wasFoundInDatabase: false,
             wasCreatedFromProvider: true,
+            providerType: ToNullableProviderType(providerResult.ProviderType),
             providerName: providerResult.ProviderName,
             resultCount: meanings.Length);
 
@@ -553,6 +686,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: null,
             wasFoundInDatabase: false,
             wasCreatedFromProvider: false,
+            providerType: ToNullableProviderType(providerResult.ProviderType),
             providerName: providerResult.ProviderName,
             resultCount: providerResult.SentenceTranslations.Count);
 
@@ -597,6 +731,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: null,
             wasFoundInDatabase: false,
             wasCreatedFromProvider: false,
+            providerType: null,
             providerName: null,
             resultCount: 0);
 
@@ -608,14 +743,15 @@ public sealed class CreateLookupCommandHandler
     /// Database ve provider sonucunda bulunamayan word/phrase lookup istekleri için lookup history oluşturur.
     /// </summary>
     private async Task SaveNotFoundLookupHistoryAsync(
-        string keycloakUserId,
-        CreateLookupCommand request,
-        string normalizedText,
-        LookupInputType inputType,
-        Guid sourceLanguageId,
-        Guid targetLanguageId,
-        string providerName,
-        CancellationToken cancellationToken)
+            string keycloakUserId,
+            CreateLookupCommand request,
+            string normalizedText,
+            LookupInputType inputType,
+            Guid sourceLanguageId,
+            Guid targetLanguageId,
+            ProviderType? providerType,
+            string providerName,
+            CancellationToken cancellationToken)
     {
         var lookupHistory = CreateLookupHistory(
             keycloakUserId: keycloakUserId,
@@ -627,6 +763,7 @@ public sealed class CreateLookupCommandHandler
             learningItemId: null,
             wasFoundInDatabase: false,
             wasCreatedFromProvider: false,
+            providerType: providerType,
             providerName: providerName,
             resultCount: 0);
 
@@ -645,17 +782,18 @@ public sealed class CreateLookupCommandHandler
     /// doğrudan KeycloakUserId ile sahiplenir.
     /// </summary>
     private static LookupHistory CreateLookupHistory(
-        string keycloakUserId,
-        string queryText,
-        string normalizedQueryText,
-        LookupInputType inputType,
-        Guid sourceLanguageId,
-        Guid targetLanguageId,
-        Guid? learningItemId,
-        bool wasFoundInDatabase,
-        bool wasCreatedFromProvider,
-        string? providerName,
-        int resultCount)
+            string keycloakUserId,
+            string queryText,
+            string normalizedQueryText,
+            LookupInputType inputType,
+            Guid sourceLanguageId,
+            Guid targetLanguageId,
+            Guid? learningItemId,
+            bool wasFoundInDatabase,
+            bool wasCreatedFromProvider,
+            ProviderType? providerType,
+            string? providerName,
+            int resultCount)
     {
         return new LookupHistory(
             keycloakUserId,
@@ -667,9 +805,91 @@ public sealed class CreateLookupCommandHandler
             learningItemId,
             wasFoundInDatabase,
             wasCreatedFromProvider,
-            providerType: null,
+            providerType,
             providerName,
             resultCount);
+    }
+
+    /// <summary>
+    /// ProviderType.Unknown değerini LookupHistory için null'a çevirir.
+    /// 
+    /// Neden?
+    /// - Provider kullanılmadıysa null daha anlamlıdır.
+    /// - Unknown gerçek provider tipi değildir.
+    /// </summary>
+    private static ProviderType? ToNullableProviderType(ProviderType providerType)
+    {
+        return providerType == ProviderType.Unknown
+            ? null
+            : providerType;
+    }
+
+    /// <summary>
+    /// Provider sonucundan ContentSource değerini çözer.
+    /// 
+    /// Eğer provider metadata göndermediyse Unknown bırakılır.
+    /// AzureTranslationDictionaryProvider bu alanı AzureTranslator olarak doldurur.
+    /// </summary>
+    private static ContentSource ResolveProviderContentSource(
+        DictionaryProviderResult providerResult)
+    {
+        return providerResult.ContentSource;
+    }
+
+    /// <summary>
+    /// Provider sonucundan QualityStatus değerini çözer.
+    /// 
+    /// Provider quality status göndermediyse AutoGenerated kullanıyoruz.
+    /// Çünkü provider sonucu insan doğrulamasından geçmemiştir.
+    /// </summary>
+    private static ContentQualityStatus ResolveProviderQualityStatus(
+        DictionaryProviderResult providerResult)
+    {
+        return providerResult.QualityStatus == ContentQualityStatus.Unknown
+            ? ContentQualityStatus.AutoGenerated
+            : providerResult.QualityStatus;
+    }
+
+    /// <summary>
+    /// Provider-created LearningItem için external source key üretir.
+    /// 
+    /// Bu key sayesinde aynı içeriğin hangi provider akışıyla oluştuğu izlenebilir.
+    /// </summary>
+    private static string BuildProviderExternalSourceKey(
+        string providerName,
+        string itemType,
+        string normalizedText)
+    {
+        var safeProviderName = string.IsNullOrWhiteSpace(providerName)
+            ? "UnknownProvider"
+            : providerName.Trim();
+
+        var safeItemType = string.IsNullOrWhiteSpace(itemType)
+            ? "unknown"
+            : itemType.Trim().ToLowerInvariant();
+
+        var safeNormalizedText = string.IsNullOrWhiteSpace(normalizedText)
+            ? "unknown"
+            : normalizedText.Trim().ToLowerInvariant();
+
+        var externalSourceKey = $"{safeProviderName}:{safeItemType}:{safeNormalizedText}";
+
+        if (externalSourceKey.Length <= ImportConstants.MaxExternalSourceKeyLength)
+        {
+            return externalSourceKey;
+        }
+
+        return externalSourceKey[..ImportConstants.MaxExternalSourceKeyLength];
+    }
+
+    /// <summary>
+    /// Kullanıcıya gösterilecek metni güvenli şekilde trimler.
+    /// </summary>
+    private static string NormalizeDisplayText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim();
     }
 
 }

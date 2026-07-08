@@ -5,26 +5,42 @@ namespace Wordix.Domain.Enums;
 /// 
 /// CEFR daha teknik bir seviyedir.
 /// DifficultyGroup ise kullanıcı dostu gruptur.
+/// 
+/// Wordix mapping kararı:
+/// - A1-A2 => Beginner
+/// - B1-B2 => Intermediate
+/// - C1-C2 => Hard
 /// </summary>
 public enum DifficultyGroup
 {
     /// <summary>
     /// Zorluk henüz belirlenmemiş.
+    /// 
+    /// Provider'dan gelen veya CEFR seviyesi bilinmeyen içeriklerde kullanılabilir.
     /// </summary>
     Unknown = 0,
 
     /// <summary>
-    /// A1-A2 gibi başlangıç seviyelerine karşılık gelebilir.
+    /// Başlangıç seviyesi.
+    /// 
+    /// CEFR karşılığı:
+    /// A1-A2
     /// </summary>
     Beginner = 1,
 
     /// <summary>
-    /// B1 seviyesine karşılık gelebilir.
+    /// Orta/üst orta seviye.
+    /// 
+    /// CEFR karşılığı:
+    /// B1-B2
     /// </summary>
     Intermediate = 2,
 
     /// <summary>
-    /// B2-C1-C2 gibi daha zor seviyelere karşılık gelebilir.
+    /// İleri/zor seviye.
+    /// 
+    /// CEFR karşılığı:
+    /// C1-C2
     /// </summary>
     Hard = 3
 }

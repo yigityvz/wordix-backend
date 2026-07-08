@@ -12,6 +12,12 @@
 public enum ProviderType
 {
     /// <summary>
+    /// Provider tipi bilinmiyor veya henüz belirlenmemiş.
+    /// Defensive/default değer olarak kullanılır.
+    /// </summary>
+    Unknown = 0,
+
+    /// <summary>
     /// Kelime/phrase anlamı sağlayan provider.
     /// Örnek: Wiktionary, Kaikki
     /// </summary>
