@@ -104,6 +104,20 @@ public static class PersistenceServiceRegistration
         // EF Core implementasyonu Persistence katmanında kalır.
         services.AddScoped<IAdminAnalyticsRepository, AdminAnalyticsRepository>();
 
+        // User statistics/dashboard endpointleri için özel aggregate repository.
+        //
+        // Bu repository current user'a ait:
+        // - learning summary
+        // - quiz statistics
+        // - difficult items
+        // - deck statistics
+        // - confidence score distribution
+        // verilerini üretir.
+        //
+        // Application katmanı sadece IUserStatisticsRepository interface'ini bilir.
+        // EF Core implementasyonu Persistence katmanında kalır.
+        services.AddScoped<IUserStatisticsRepository, UserStatisticsRepository>();
+
         // Dil çözümleme servisi.
         //
         // Application katmanı ILanguageResolver ister.
