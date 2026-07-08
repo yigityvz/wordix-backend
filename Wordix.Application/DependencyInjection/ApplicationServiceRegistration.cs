@@ -6,6 +6,7 @@ using Wordix.Application.Features.Lookups.Services;
 using Wordix.Application.Features.Quizzes.Services;
 using Wordix.Application.Common.Interfaces.Import;
 using Wordix.Application.Features.Imports.Services;
+using Wordix.Application.Features.AdminAnalytics.Services;
 
 namespace Wordix.Application.DependencyInjection;
 
@@ -61,6 +62,14 @@ public static class ApplicationServiceRegistration
         services.AddScoped<IProviderRequestLogService, ProviderRequestLogService>();
 
         services.AddScoped<IExternalContentCacheService, ExternalContentCacheService>();
+
+        // Admin analytics endpointleri çalıştığında,
+        // geçerli admin kullanıcının yaptığı işlemleri AdminActionLogs tablosuna yazmak için kullanılır.
+        //
+        // Bu servis Application katmanındadır.
+        // DbContext bilmez, HttpContext bilmez.
+        // Current user bilgisini ICurrentUserService abstraction'ı üzerinden alır.
+        services.AddScoped<IAdminActionLogService, AdminActionLogService>();
 
         // MediatR pipeline behavior registration:
         //

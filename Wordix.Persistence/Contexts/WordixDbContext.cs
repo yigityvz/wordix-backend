@@ -175,6 +175,17 @@ public class WordixDbContext : DbContext
 
     public DbSet<ExternalContentCache> ExternalContentCaches => Set<ExternalContentCache>();
 
+    /// <summary>
+    /// Admin kullanıcıların sistemde yaptığı önemli işlemleri audit amacıyla tutar.
+    /// 
+    /// Örnek:
+    /// - Admin dashboard görüntüleme
+    /// - Provider stats görüntüleme
+    /// - Import job başlatma
+    /// - Content review işlemleri
+    /// </summary>
+    public DbSet<AdminActionLog> AdminActionLogs => Set<AdminActionLog>();
+
 
     /// <summary>
     /// Quiz içine sistem önerisiyle eklenen itemların takip kayıtlarını tutar.

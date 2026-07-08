@@ -94,6 +94,16 @@ public static class PersistenceServiceRegistration
         services.AddScoped<ILookupRepository, LookupRepository>();
         services.AddScoped<IQuizRepository, QuizRepository>();
 
+        // Admin analytics ekranları için özel aggregate/raporlama repository'si.
+        //
+        // Bu repository normal CRUD yapmaz.
+        // LookupHistory, UserLearningItem, QuizAnswer, ProviderRequestLog gibi tablolarda
+        // GroupBy/Count/Average/Distinct gibi SQL aggregate sorguları çalıştırır.
+        //
+        // Application katmanı sadece IAdminAnalyticsRepository interface'ini bilir.
+        // EF Core implementasyonu Persistence katmanında kalır.
+        services.AddScoped<IAdminAnalyticsRepository, AdminAnalyticsRepository>();
+
         // Dil çözümleme servisi.
         //
         // Application katmanı ILanguageResolver ister.
