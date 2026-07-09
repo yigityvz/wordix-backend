@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Decks.Dtos.Responses;
 using Wordix.Application.Features.Decks.Mappers;
@@ -30,7 +29,6 @@ namespace Wordix.Application.Features.Decks.Queries.GetMyDecks;
 public sealed class GetMyDecksQueryHandler
     : IRequestHandler<GetMyDecksQuery, GetMyDecksResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
 
@@ -41,11 +39,9 @@ public sealed class GetMyDecksQueryHandler
     /// Persistence işlemleri repository abstraction'ları üzerinden yapılır.
     /// </summary>
     public GetMyDecksQueryHandler(
-        ICurrentUserService currentUserService,
         IRepository<Deck> deckRepository,
         IRepository<DeckItem> deckItemRepository)
     {
-        _currentUserService = currentUserService;
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
     }
@@ -57,11 +53,12 @@ public sealed class GetMyDecksQueryHandler
         GetMyDecksQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Kullanıcı deckleri bu alan üzerinden filtrelenir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Kullanıcının aktif decklerini getiriyoruz.
         //

@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.UserStatistics.Dtos.Responses;
 using Wordix.Shared.Responses;
 
@@ -10,11 +11,11 @@ namespace Wordix.Application.Features.UserStatistics.Queries.GetDifficultItems;
 /// Bu query sayfalı response döner:
 /// PagedResult&lt;DifficultLearningItemResponse&gt;
 /// 
-/// Kullanıcı id request'ten alınmaz.
-/// Handler current user token'ından KeycloakUserId değerini alır.
+/// Kullanıcı id client'tan alınmaz.
+/// CurrentUserBehavior tarafından request.KeycloakUserId üzerine yazılır.
 /// </summary>
 public sealed class GetDifficultItemsQuery
-    : IRequest<PagedResult<DifficultLearningItemResponse>>
+    : IRequest<PagedResult<DifficultLearningItemResponse>>, IRequiresCurrentUser
 {
     public GetDifficultItemsQuery(
         int? pageNumber = null,
@@ -31,6 +32,12 @@ public sealed class GetDifficultItemsQuery
         ItemType = itemType;
         LearningStatus = learningStatus;
     }
+
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// Client tarafından gönderilmez.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
 
     public int? PageNumber { get; }
 

@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.Lookups.Dtos.Responses;
 
 namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
@@ -18,9 +19,24 @@ namespace Wordix.Application.Features.Lookups.Commands.CreateLookup;
 /// 
 /// Faz 12'de bu command sadece iskelet olarak oluşturulmuştu.
 /// Faz 13'te artık gerçek LookupResponse dönecek hale getiriyoruz.
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - Controller KeycloakUserId set etmez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini çözer.
+/// - Handler lookup history ownership için request.KeycloakUserId değerini kullanır.
 /// </summary>
-public sealed record CreateLookupCommand : IRequest<LookupResponse>
+public sealed record CreateLookupCommand
+    : IRequest<LookupResponse>, IRequiresCurrentUser
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// Bu değer client tarafından gönderilmez.
+    /// LookupHistory kayıtlarının kullanıcı sahipliği için kullanılır.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+
     /// <summary>
     /// Kullanıcının arattığı ham metindir.
     /// 
@@ -56,5 +72,4 @@ public sealed record CreateLookupCommand : IRequest<LookupResponse>
     /// Kullanıcı İngilizce kelimenin Türkçe anlamını istiyorsa targetLanguageCode = "tr"
     /// </summary>
     public string TargetLanguageCode { get; init; } = string.Empty;
-
 }

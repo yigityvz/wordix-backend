@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Models;
 using Wordix.Application.Features.Quizzes.Dtos.Responses;
@@ -37,7 +36,6 @@ namespace Wordix.Application.Features.Quizzes.Commands.SubmitQuizAnswer;
 public sealed class SubmitQuizAnswerCommandHandler
     : IRequestHandler<SubmitQuizAnswerCommand, SubmitQuizAnswerResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IQuizRepository _quizRepository;
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
@@ -50,7 +48,7 @@ public sealed class SubmitQuizAnswerCommandHandler
     private readonly ILearningScoreCalculator _learningScoreCalculator;
     private readonly IReviewScheduleCalculator _reviewScheduleCalculator;
     private readonly ILearningProgressUpdater _learningProgressUpdater;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     /// <summary>
     /// Handler'ın ihtiyaç duyduğu dependency'ler DI üzerinden alınır.
@@ -63,7 +61,6 @@ public sealed class SubmitQuizAnswerCommandHandler
     /// Quiz ownership ve duplicate answer sorguları IQuizRepository üzerinden yapılır.
     /// </summary>
     public SubmitQuizAnswerCommandHandler(
-        ICurrentUserService currentUserService,
         IQuizRepository quizRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
@@ -75,10 +72,9 @@ public sealed class SubmitQuizAnswerCommandHandler
         IQuizAnswerEvaluator quizAnswerEvaluator,
         ILearningScoreCalculator learningScoreCalculator,
         IReviewScheduleCalculator reviewScheduleCalculator,
-        ILearningProgressUpdater learningProgressUpdater,
-        IUnitOfWork unitOfWork)
+        ILearningProgressUpdater learningProgressUpdater
+        )
     {
-        _currentUserService = currentUserService;
         _quizRepository = quizRepository;
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
@@ -91,7 +87,7 @@ public sealed class SubmitQuizAnswerCommandHandler
         _learningScoreCalculator = learningScoreCalculator;
         _reviewScheduleCalculator = reviewScheduleCalculator;
         _learningProgressUpdater = learningProgressUpdater;
-        _unitOfWork = unitOfWork;
+       
     }
 
     /// <summary>
@@ -101,12 +97,13 @@ public sealed class SubmitQuizAnswerCommandHandler
         SubmitQuizAnswerCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // UserProfileId client'tan alınmaz.
-        // Backend burada UserProfile oluşturmaz.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // Controller tarafından set edilmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Quiz ownership ve answer ownership kontrolleri bu değerle yapılır.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. QuizSession var mı ve current user'a ait mi kontrol ediyoruz.
         //
@@ -351,17 +348,7 @@ public sealed class SubmitQuizAnswerCommandHandler
                 cancellationToken);
         }
 
-        // 19. Tüm değişiklikler tek transaction/save akışında kaydedilir.
-        //
-        // Normal soru:
-        // - QuizAnswer
-        // - UserLearningProgress
-        // - LearningProgressHistory
-        //
-        // System recommendation soru dictionary'de değilse:
-        // - QuizAnswer
-        // - QuizRecommendationItem.WasAnsweredCorrectly
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return QuizMapper.ToSubmitQuizAnswerResponse(
             quizAnswer: quizAnswer,

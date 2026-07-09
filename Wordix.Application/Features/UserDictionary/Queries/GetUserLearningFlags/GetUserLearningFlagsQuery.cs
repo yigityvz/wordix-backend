@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Queries.GetUserLearningFlags;
@@ -13,7 +14,18 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserLearningFlag
 /// 
 /// Buradaki id global LearningItemId değildir.
 /// UserLearningItem.Id değeridir.
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini çözer.
 /// </summary>
 public sealed record GetUserLearningFlagsQuery(
     Guid UserLearningItemId)
-    : IRequest<GetUserLearningFlagsResponse>;
+    : IRequest<GetUserLearningFlagsResponse>, IRequiresCurrentUser
+{
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// Client tarafından gönderilmez.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+}

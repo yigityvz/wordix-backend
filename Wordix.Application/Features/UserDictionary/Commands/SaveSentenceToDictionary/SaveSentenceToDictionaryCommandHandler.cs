@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Localization;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Lookups.Services;
@@ -34,7 +33,6 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveSentenceToDict
 public sealed class SaveSentenceToDictionaryCommandHandler
     : IRequestHandler<SaveSentenceToDictionaryCommand, SaveSentenceToDictionaryResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly ITextNormalizer _textNormalizer;
     private readonly ILanguageResolver _languageResolver;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
@@ -45,10 +43,9 @@ public sealed class SaveSentenceToDictionaryCommandHandler
     private readonly IRepository<UserLearningItem> _userLearningItemGenericRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
     private readonly IRepository<LearningProgressHistory> _learningProgressHistoryRepository;
-    private readonly IUnitOfWork _unitOfWork;
+  
 
     public SaveSentenceToDictionaryCommandHandler(
-        ICurrentUserService currentUserService,
         ITextNormalizer textNormalizer,
         ILanguageResolver languageResolver,
         IUserLearningItemRepository userLearningItemRepository,
@@ -58,10 +55,9 @@ public sealed class SaveSentenceToDictionaryCommandHandler
         IRepository<LookupHistory> lookupHistoryRepository,
         IRepository<UserLearningItem> userLearningItemGenericRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository,
-        IRepository<LearningProgressHistory> learningProgressHistoryRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<LearningProgressHistory> learningProgressHistoryRepository
+        )
     {
-        _currentUserService = currentUserService;
         _textNormalizer = textNormalizer;
         _languageResolver = languageResolver;
         _userLearningItemRepository = userLearningItemRepository;
@@ -72,15 +68,19 @@ public sealed class SaveSentenceToDictionaryCommandHandler
         _userLearningItemGenericRepository = userLearningItemGenericRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
         _learningProgressHistoryRepository = learningProgressHistoryRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     public async Task<SaveSentenceToDictionaryResponse> Handle(
         SaveSentenceToDictionaryCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Kaynak cümle ve çeviri metnini normalize ediyoruz.
         var normalizedSourceText = _textNormalizer.Normalize(request.SourceText);
@@ -232,8 +232,7 @@ public sealed class SaveSentenceToDictionaryCommandHandler
             progressHistory,
             cancellationToken);
 
-        // 10. Tek SaveChanges ile tüm kayıtları birlikte kaydediyoruz.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return UserDictionaryMapper.ToSaveSentenceToDictionaryResponse(
             userLearningItem: userLearningItem,

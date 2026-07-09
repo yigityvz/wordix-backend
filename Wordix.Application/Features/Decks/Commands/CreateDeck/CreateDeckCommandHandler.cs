@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Decks.Dtos.Responses;
 using Wordix.Application.Features.Decks.Mappers;
@@ -34,21 +33,16 @@ namespace Wordix.Application.Features.Decks.Commands.CreateDeck;
 public sealed class CreateDeckCommandHandler
     : IRequestHandler<CreateDeckCommand, CreateDeckResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly ITextNormalizer _textNormalizer;
     private readonly IRepository<Deck> _deckRepository;
-    private readonly IUnitOfWork _unitOfWork;
 
     public CreateDeckCommandHandler(
-        ICurrentUserService currentUserService,
         ITextNormalizer textNormalizer,
-        IRepository<Deck> deckRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<Deck> deckRepository
+        )
     {
-        _currentUserService = currentUserService;
         _textNormalizer = textNormalizer;
         _deckRepository = deckRepository;
-        _unitOfWork = unitOfWork;
     }
 
     /// <summary>
@@ -58,11 +52,12 @@ public sealed class CreateDeckCommandHandler
         CreateDeckCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Deck ownership bu alan üzerinden yapılır.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Deck adını normalize ediyoruz.
         //
@@ -104,9 +99,6 @@ public sealed class CreateDeckCommandHandler
         await _deckRepository.AddAsync(
             deck,
             cancellationToken);
-
-        // 6. Değişiklikleri tek transaction mantığıyla kaydediyoruz.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 7. Response mapping işini DeckMapper'a bırakıyoruz.
         return DeckMapper.ToCreateDeckResponse(deck);

@@ -3,9 +3,9 @@ using Wordix.Application.Common.Exceptions;
 using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Dtos.Responses;
+using Wordix.Application.Features.Quizzes.Mappers;
 using Wordix.Domain.Entities;
 using Wordix.Domain.Enums;
-using Wordix.Application.Features.Quizzes.Mappers;
 
 namespace Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 
@@ -35,7 +35,6 @@ namespace Wordix.Application.Features.Quizzes.Queries.GetQuizSummary;
 public sealed class GetQuizSummaryQueryHandler
     : IRequestHandler<GetQuizSummaryQuery, QuizSummaryResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IQuizRepository _quizRepository;
     private readonly IRepository<QuizAnswer> _quizAnswerRepository;
 
@@ -50,11 +49,9 @@ public sealed class GetQuizSummaryQueryHandler
     /// Quiz session ownership kontrolü IQuizRepository üzerinden yapılır.
     /// </summary>
     public GetQuizSummaryQueryHandler(
-        ICurrentUserService currentUserService,
         IQuizRepository quizRepository,
         IRepository<QuizAnswer> quizAnswerRepository)
     {
-        _currentUserService = currentUserService;
         _quizRepository = quizRepository;
         _quizAnswerRepository = quizAnswerRepository;
     }
@@ -66,11 +63,12 @@ public sealed class GetQuizSummaryQueryHandler
         GetQuizSummaryQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Quiz summary ownership kontrolü bu değerle yapılır.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. QuizSession var mı ve current user'a ait mi kontrol ediyoruz.
         //

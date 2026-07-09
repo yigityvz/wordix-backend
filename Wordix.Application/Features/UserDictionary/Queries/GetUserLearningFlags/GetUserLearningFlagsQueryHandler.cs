@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -28,16 +27,13 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserLearningFlag
 public sealed class GetUserLearningFlagsQueryHandler
     : IRequestHandler<GetUserLearningFlagsQuery, GetUserLearningFlagsResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
 
     public GetUserLearningFlagsQueryHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<UserLearningFlag> userLearningFlagRepository)
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningFlagRepository = userLearningFlagRepository;
     }
@@ -46,7 +42,7 @@ public sealed class GetUserLearningFlagsQueryHandler
         GetUserLearningFlagsQuery request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        var keycloakUserId = request.KeycloakUserId;
 
         // Önce UserLearningItem current user'a ait mi kontrol ediyoruz.
         //

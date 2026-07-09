@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
@@ -32,7 +31,6 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryIt
 public sealed class GetUserDictionaryItemByIdQueryHandler
     : IRequestHandler<GetUserDictionaryItemByIdQuery, UserDictionaryItemResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
@@ -56,7 +54,6 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
     /// Bu servis token claim okuma detayını Application katmanından saklar.
     /// </summary>
     public GetUserDictionaryItemByIdQueryHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
@@ -69,7 +66,6 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         IRepository<UserLearningNote> userLearningNoteRepository,
         IRepository<UserLearningFlag> userLearningFlagRepository)
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
@@ -90,12 +86,12 @@ public sealed class GetUserDictionaryItemByIdQueryHandler
         GetUserDictionaryItemByIdQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        // Ownership kontrolü doğrudan KeycloakUserId üzerinden yapılır.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Ownership kontrolü doğrudan bu değer üzerinden yapılır.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. UserLearningItem kaydını id ile buluyoruz.
         // Bu id global LearningItemId değil, kullanıcının kişisel dictionary kayıt id'sidir.

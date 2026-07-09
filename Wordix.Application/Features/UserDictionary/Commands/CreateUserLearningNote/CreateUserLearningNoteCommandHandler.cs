@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -27,10 +26,9 @@ namespace Wordix.Application.Features.UserDictionary.Commands.CreateUserLearning
 public sealed class CreateUserLearningNoteCommandHandler
     : IRequestHandler<CreateUserLearningNoteCommand, UserLearningNoteResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningNote> _userLearningNoteRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     /// <summary>
     /// Handler ihtiyaç duyduğu dependency'leri DI üzerinden alır.
@@ -40,15 +38,13 @@ public sealed class CreateUserLearningNoteCommandHandler
     /// Burada controller logic'i yok.
     /// </summary>
     public CreateUserLearningNoteCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
-        IRepository<UserLearningNote> userLearningNoteRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<UserLearningNote> userLearningNoteRepository
+        )
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningNoteRepository = userLearningNoteRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     /// <summary>
@@ -58,7 +54,11 @@ public sealed class CreateUserLearningNoteCommandHandler
         CreateUserLearningNoteCommand request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         // UserLearningItem current user'a ait mi kontrol ediyoruz.
         //
@@ -86,7 +86,7 @@ public sealed class CreateUserLearningNoteCommandHandler
             note,
             cancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return UserDictionaryMapper.ToUserLearningNoteResponse(note);
     }

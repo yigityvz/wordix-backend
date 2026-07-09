@@ -1,4 +1,6 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
+using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
@@ -13,9 +15,24 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 /// - İleride UserLearningItemEvent oluşturur.
 /// 
 /// Bu yüzden CQRS açısından Query değil Command olarak modellenir.
+/// 
+/// Current user bilgisi:
+/// - Client request içinde KeycloakUserId göndermez.
+/// - Controller KeycloakUserId set etmez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini okur
+///   ve bu command üzerindeki KeycloakUserId propertysine yazar.
 /// </summary>
-public sealed record SaveLearningItemCommand : IRequest<SaveLearningItemResponse>
+public sealed record SaveLearningItemCommand
+    : IRequest<SaveLearningItemResponse>, IRequiresCurrentUser, ITransactionalRequest
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// Bu property client tarafından set edilmez.
+    /// Handler bu değeri ownership ve kullanıcıya özel kayıt oluşturma işlemlerinde kullanır.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+
     /// <summary>
     /// Kaydedilecek global LearningItem id değeridir.
     /// 

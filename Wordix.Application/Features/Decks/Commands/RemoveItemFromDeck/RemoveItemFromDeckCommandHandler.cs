@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Decks.Dtos.Responses;
 using Wordix.Application.Features.Decks.Mappers;
@@ -33,21 +32,18 @@ namespace Wordix.Application.Features.Decks.Commands.RemoveItemFromDeck;
 public sealed class RemoveItemFromDeckCommandHandler
     : IRequestHandler<RemoveItemFromDeckCommand, RemoveItemFromDeckResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     public RemoveItemFromDeckCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<Deck> deckRepository,
-        IRepository<DeckItem> deckItemRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<DeckItem> deckItemRepository
+        )
     {
-        _currentUserService = currentUserService;
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     /// <summary>
@@ -57,11 +53,12 @@ public sealed class RemoveItemFromDeckCommandHandler
         RemoveItemFromDeckCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Deck ownership bu alan üzerinden kontrol edilir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Deck var mı ve aktif mi kontrol ediyoruz.
         var deck = await _deckRepository.FirstOrDefaultAsync(
@@ -112,8 +109,7 @@ public sealed class RemoveItemFromDeckCommandHandler
         // Bu bağlantı kaldırıldığında ilişki kaydı silinebilir.
         _deckItemRepository.Remove(deckItem);
 
-        // 7. Değişiklikleri database'e kaydediyoruz.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return response;
     }

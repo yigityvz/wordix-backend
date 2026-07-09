@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserStatistics.Dtos.Responses;
 using Wordix.Application.Features.UserStatistics.Mappers;
@@ -15,14 +14,11 @@ namespace Wordix.Application.Features.UserStatistics.Queries.GetConfidenceScoreD
 public sealed class GetConfidenceScoreDistributionQueryHandler
     : IRequestHandler<GetConfidenceScoreDistributionQuery, ConfidenceScoreDistributionResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserStatisticsRepository _userStatisticsRepository;
 
     public GetConfidenceScoreDistributionQueryHandler(
-        ICurrentUserService currentUserService,
         IUserStatisticsRepository userStatisticsRepository)
     {
-        _currentUserService = currentUserService;
         _userStatisticsRepository = userStatisticsRepository;
     }
 
@@ -30,7 +26,7 @@ public sealed class GetConfidenceScoreDistributionQueryHandler
         GetConfidenceScoreDistributionQuery request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        var keycloakUserId = request.KeycloakUserId;
 
         var model = await _userStatisticsRepository.GetConfidenceScoreDistributionAsync(
             keycloakUserId,

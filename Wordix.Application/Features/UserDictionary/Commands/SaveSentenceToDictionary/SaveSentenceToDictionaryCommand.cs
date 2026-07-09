@@ -1,4 +1,6 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
+using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Commands.SaveSentenceToDictionary;
@@ -12,9 +14,24 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveSentenceToDict
 ///   LearningItem + Sentence + SentenceTranslation haline getirip dictionary'ye kaydeder.
 /// 
 /// Bu yüzden iki farklı use-case'i tek command içine sıkıştırmıyoruz.
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - Controller KeycloakUserId set etmez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini çözer.
+/// - Handler bu değeri request.KeycloakUserId üzerinden kullanır.
 /// </summary>
-public sealed record SaveSentenceToDictionaryCommand : IRequest<SaveSentenceToDictionaryResponse>
+public sealed record SaveSentenceToDictionaryCommand
+    : IRequest<SaveSentenceToDictionaryResponse>, IRequiresCurrentUser, ITransactionalRequest
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// Bu değer client tarafından gönderilmez.
+    /// Sentence dictionary kaydı ve ownership kontrolleri için kullanılır.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+
     /// <summary>
     /// Kaynak cümle metni.
     /// </summary>

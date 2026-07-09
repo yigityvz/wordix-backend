@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -31,28 +30,29 @@ namespace Wordix.Application.Features.UserDictionary.Commands.DeleteUserLearning
 public sealed class DeleteUserLearningNoteCommandHandler
     : IRequestHandler<DeleteUserLearningNoteCommand, UserLearningNoteResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningNote> _userLearningNoteRepository;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     public DeleteUserLearningNoteCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningNote> userLearningNoteRepository,
-        IRepository<UserLearningItem> userLearningItemRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<UserLearningItem> userLearningItemRepository
+        )
     {
-        _currentUserService = currentUserService;
         _userLearningNoteRepository = userLearningNoteRepository;
         _userLearningItemRepository = userLearningItemRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     public async Task<UserLearningNoteResponse> Handle(
         DeleteUserLearningNoteCommand request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         var note = await _userLearningNoteRepository.FirstOrDefaultAsync(
             note => note.Id == request.UserLearningNoteId,
@@ -90,7 +90,7 @@ public sealed class DeleteUserLearningNoteCommandHandler
 
         _userLearningNoteRepository.Remove(note);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+       
 
         return response;
     }

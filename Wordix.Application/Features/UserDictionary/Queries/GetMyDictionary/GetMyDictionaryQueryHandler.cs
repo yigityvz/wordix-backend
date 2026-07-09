@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
@@ -31,7 +30,6 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 public sealed class GetMyDictionaryQueryHandler
     : IRequestHandler<GetMyDictionaryQuery, GetMyDictionaryResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Word> _wordRepository;
@@ -55,7 +53,6 @@ public sealed class GetMyDictionaryQueryHandler
     /// Bu servis token claim okuma detayını Application katmanından saklar.
     /// </summary>
     public GetMyDictionaryQueryHandler(
-        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Word> wordRepository,
@@ -69,7 +66,6 @@ public sealed class GetMyDictionaryQueryHandler
         IRepository<UserLearningFlag> userLearningFlagRepository)
 
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _wordRepository = wordRepository;
@@ -90,12 +86,12 @@ public sealed class GetMyDictionaryQueryHandler
         GetMyDictionaryQuery request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        // Dictionary kayıtları doğrudan bu KeycloakUserId üzerinden filtrelenir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior pipeline içinde ICurrentUserService üzerinden çözülür
+        // ve bu query üzerine yazılır.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Kullanıcının aktif dictionary kayıtlarını getiriyoruz.
         // Bu method artık UserProfileId değil, KeycloakUserId ile çalışır.

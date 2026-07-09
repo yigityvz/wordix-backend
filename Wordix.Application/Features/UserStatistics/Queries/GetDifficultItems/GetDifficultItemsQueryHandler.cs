@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserStatistics.Dtos.Responses;
 using Wordix.Application.Features.UserStatistics.Mappers;
@@ -26,14 +25,11 @@ namespace Wordix.Application.Features.UserStatistics.Queries.GetDifficultItems;
 public sealed class GetDifficultItemsQueryHandler
     : IRequestHandler<GetDifficultItemsQuery, PagedResult<DifficultLearningItemResponse>>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserStatisticsRepository _userStatisticsRepository;
 
     public GetDifficultItemsQueryHandler(
-        ICurrentUserService currentUserService,
         IUserStatisticsRepository userStatisticsRepository)
     {
-        _currentUserService = currentUserService;
         _userStatisticsRepository = userStatisticsRepository;
     }
 
@@ -41,7 +37,7 @@ public sealed class GetDifficultItemsQueryHandler
         GetDifficultItemsQuery request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        var keycloakUserId = request.KeycloakUserId;
 
         var filter = UserStatisticsQueryParameterResolver.ResolveDifficultItemsFilter(
             request);

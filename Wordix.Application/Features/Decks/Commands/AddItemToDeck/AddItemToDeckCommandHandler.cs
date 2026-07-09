@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Decks.Dtos.Responses;
 using Wordix.Application.Features.Decks.Mappers;
@@ -36,24 +35,20 @@ namespace Wordix.Application.Features.Decks.Commands.AddItemToDeck;
 public sealed class AddItemToDeckCommandHandler
     : IRequestHandler<AddItemToDeckCommand, AddItemToDeckResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<Deck> _deckRepository;
     private readonly IRepository<DeckItem> _deckItemRepository;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
-    private readonly IUnitOfWork _unitOfWork;
 
     public AddItemToDeckCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<Deck> deckRepository,
         IRepository<DeckItem> deckItemRepository,
-        IRepository<UserLearningItem> userLearningItemRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<UserLearningItem> userLearningItemRepository
+        )
     {
-        _currentUserService = currentUserService;
         _deckRepository = deckRepository;
         _deckItemRepository = deckItemRepository;
         _userLearningItemRepository = userLearningItemRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     /// <summary>
@@ -63,11 +58,12 @@ public sealed class AddItemToDeckCommandHandler
         AddItemToDeckCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Deck ve UserLearningItem ownership kontrolleri bu değerle yapılır.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        // Handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Deck var mı ve aktif mi kontrol ediyoruz.
         var deck = await _deckRepository.FirstOrDefaultAsync(
@@ -147,8 +143,7 @@ public sealed class AddItemToDeckCommandHandler
             deckItem,
             cancellationToken);
 
-        // 9. Değişiklikleri database'e kaydediyoruz.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         // 10. Response mapping işini DeckMapper'a bırakıyoruz.
         return DeckMapper.ToAddItemToDeckResponse(deckItem);

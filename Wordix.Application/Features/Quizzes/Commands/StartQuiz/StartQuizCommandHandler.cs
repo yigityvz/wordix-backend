@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Models;
 using Wordix.Application.Features.Quizzes.Dtos.Responses;
@@ -45,7 +44,6 @@ public sealed class StartQuizCommandHandler
     /// </summary>
     private const int OptionCountPerQuestion = 4;
 
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<UserLearningItem> _genericUserLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
@@ -65,7 +63,7 @@ public sealed class StartQuizCommandHandler
     private readonly IRepository<QuizQuestion> _quizQuestionRepository;
     private readonly IRepository<QuizOption> _quizOptionRepository;
     private readonly IQuizQuestionGeneratorResolver _quizQuestionGeneratorResolver;
-    private readonly IUnitOfWork _unitOfWork;
+    
     /// <summary>
     /// Handler ihtiyacı olan tüm servis ve repository abstraction'larını DI üzerinden alır.
     /// 
@@ -77,7 +75,6 @@ public sealed class StartQuizCommandHandler
     /// Soru üretme algoritması da direkt burada yazılmaz; IQuizQuestionGenerator kullanılır.
     /// </summary>
     public StartQuizCommandHandler(
-        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<UserLearningItem> genericUserLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
@@ -96,10 +93,9 @@ public sealed class StartQuizCommandHandler
         IRepository<QuizSession> quizSessionRepository,
         IRepository<QuizQuestion> quizQuestionRepository,
         IRepository<QuizOption> quizOptionRepository,
-        IQuizQuestionGeneratorResolver quizQuestionGeneratorResolver,
-        IUnitOfWork unitOfWork)
+        IQuizQuestionGeneratorResolver quizQuestionGeneratorResolver
+        )
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _genericUserLearningItemRepository = genericUserLearningItemRepository;
         _learningItemRepository = learningItemRepository;
@@ -119,7 +115,7 @@ public sealed class StartQuizCommandHandler
         _quizQuestionRepository = quizQuestionRepository;
         _quizOptionRepository = quizOptionRepository;
         _quizQuestionGeneratorResolver = quizQuestionGeneratorResolver;
-        _unitOfWork = unitOfWork;
+        
     }
 
     /// <summary>
@@ -129,12 +125,11 @@ public sealed class StartQuizCommandHandler
         StartQuizCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        // Kullanıcıya ait dictionary ve quiz kayıtları bu KeycloakUserId ile ilişkilendirilir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer CurrentUserBehavior tarafından pipeline içinde doldurulur.
+        // Handler artık ICurrentUserService'i doğrudan çağırmaz.
+        var keycloakUserId = request.KeycloakUserId;
 
         // Request string değerlerini domain enum değerlerine çeviriyoruz.
         var quizType = ParseQuizType(request.QuizType);
@@ -368,8 +363,7 @@ public sealed class StartQuizCommandHandler
                     quizRecommendationItem: quizRecommendationItem));
         }
 
-        // 8. Tüm kayıtları tek SaveChanges ile kaydediyoruz.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return QuizMapper.ToStartQuizResponse(
             request: request,

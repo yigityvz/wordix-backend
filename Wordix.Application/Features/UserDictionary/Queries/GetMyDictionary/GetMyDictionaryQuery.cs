@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
@@ -12,8 +13,17 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetMyDictionary;
 /// - Sistem durumunu değiştirmez.
 /// 
 /// Kullanıcı bilgisi request body/query string ile alınmaz.
-/// Current user token üzerinden bulunur.
+/// CurrentUserBehavior pipeline içinde token üzerinden bulunur.
 /// </summary>
-public sealed record GetMyDictionaryQuery : IRequest<GetMyDictionaryResponse>
+public sealed record GetMyDictionaryQuery
+    : IRequest<GetMyDictionaryResponse>, IRequiresCurrentUser
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// Client bu değeri göndermez.
+    /// Query string veya body üzerinden alınmaz.
+    /// Handler bu değerle current user'ın dictionary kayıtlarını filtreler.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
 }

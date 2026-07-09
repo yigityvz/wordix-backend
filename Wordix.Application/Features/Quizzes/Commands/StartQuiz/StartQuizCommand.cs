@@ -1,4 +1,6 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
+using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Dtos.Responses;
 
 namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
@@ -13,9 +15,23 @@ namespace Wordix.Application.Features.Quizzes.Commands.StartQuiz;
 /// 
 /// Yani bu işlem sistem durumunu değiştirir.
 /// Bu yüzden CQRS açısından Query değil Command olarak modellenir.
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - CurrentUserBehavior pipeline içinde authenticated user's KeycloakUserId değerini çözer.
+/// - Handler request.KeycloakUserId üzerinden kullanıcıya özel quiz oluşturur.
 /// </summary>
-public sealed record StartQuizCommand : IRequest<StartQuizResponse>
+public sealed record StartQuizCommand
+    : IRequest<StartQuizResponse>, IRequiresCurrentUser, ITransactionalRequest
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// QuizSession ownership için kullanılır.
+    /// Client tarafından gönderilmez.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+
     /// <summary>
     /// Quiz türüdür.
     /// 
@@ -52,7 +68,6 @@ public sealed record StartQuizCommand : IRequest<StartQuizResponse>
     /// Handler gerçek üretilebilen soru sayısını dictionary durumuna göre belirleyecek.
     /// </summary>
     public int QuestionCount { get; init; }
-
 
     /// <summary>
     /// Quiz kaynağı Deck ise kullanılacak deck id değeridir.

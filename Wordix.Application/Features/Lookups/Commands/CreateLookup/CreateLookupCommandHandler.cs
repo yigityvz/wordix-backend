@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Localization;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Common.Models.Localization;
@@ -49,7 +48,6 @@ public sealed class CreateLookupCommandHandler
     : IRequestHandler<CreateLookupCommand, LookupResponse>
 {
 
-    private readonly ICurrentUserService _currentUserService;
     private readonly ITextNormalizer _textNormalizer;
     private readonly ILookupClassifier _lookupClassifier;
     private readonly IDictionaryProvider _dictionaryProvider;
@@ -75,7 +73,6 @@ public sealed class CreateLookupCommandHandler
     /// Bu servis Application katmanına sadece gerekli kullanıcı bilgisini sağlar.
     /// </summary>
     public CreateLookupCommandHandler(
-        ICurrentUserService currentUserService,
         ITextNormalizer textNormalizer,
         ILookupClassifier lookupClassifier,
         IDictionaryProvider dictionaryProvider,
@@ -89,7 +86,6 @@ public sealed class CreateLookupCommandHandler
         IRepository<LookupHistory> lookupHistoryRepository,
         IUnitOfWork unitOfWork)
     {
-        _currentUserService = currentUserService;
         _textNormalizer = textNormalizer;
         _lookupClassifier = lookupClassifier;
         _dictionaryProvider = dictionaryProvider;
@@ -111,12 +107,14 @@ public sealed class CreateLookupCommandHandler
         CreateLookupCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        // Kullanıcıya ait lookup/dictionary/progress gibi kayıtlar bu KeycloakUserId ile ilişkilendirilir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // Controller tarafından set edilmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        //
+        // LookupHistory kayıtları bu KeycloakUserId ile kullanıcıya bağlanır.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Kullanıcının gönderdiği ham text'i normalize ediyoruz.
         // Örnek:

@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.Quizzes.Dtos.Responses;
 using Wordix.Application.Features.Quizzes.Mappers;
@@ -33,7 +32,6 @@ namespace Wordix.Application.Features.Quizzes.Commands.SaveRecommendedItemToDict
 public sealed class SaveRecommendedItemToDictionaryCommandHandler
     : IRequestHandler<SaveRecommendedItemToDictionaryCommand, SaveRecommendedItemToDictionaryResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<QuizRecommendationItem> _quizRecommendationItemRepository;
     private readonly IRepository<SearchSuggestionLog> _searchSuggestionLogRepository;
     private readonly IRepository<QuizSession> _quizSessionRepository;
@@ -42,10 +40,9 @@ public sealed class SaveRecommendedItemToDictionaryCommandHandler
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
     private readonly IRepository<LearningProgressHistory> _learningProgressHistoryRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     public SaveRecommendedItemToDictionaryCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<QuizRecommendationItem> quizRecommendationItemRepository,
         IRepository<SearchSuggestionLog> searchSuggestionLogRepository,
         IRepository<QuizSession> quizSessionRepository,
@@ -53,10 +50,9 @@ public sealed class SaveRecommendedItemToDictionaryCommandHandler
         IRepository<Meaning> meaningRepository,
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository,
-        IRepository<LearningProgressHistory> learningProgressHistoryRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<LearningProgressHistory> learningProgressHistoryRepository
+        )
     {
-        _currentUserService = currentUserService;
         _quizRecommendationItemRepository = quizRecommendationItemRepository;
         _searchSuggestionLogRepository = searchSuggestionLogRepository;
         _quizSessionRepository = quizSessionRepository;
@@ -65,14 +61,18 @@ public sealed class SaveRecommendedItemToDictionaryCommandHandler
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
         _learningProgressHistoryRepository = learningProgressHistoryRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     public async Task<SaveRecommendedItemToDictionaryResponse> Handle(
         SaveRecommendedItemToDictionaryCommand request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         var recommendationItem = await _quizRecommendationItemRepository.FirstOrDefaultAsync(
             item => item.Id == request.QuizRecommendationItemId,
@@ -202,7 +202,7 @@ public sealed class SaveRecommendedItemToDictionaryCommandHandler
             learningItem,
             cancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return QuizMapper.ToSaveRecommendedItemToDictionaryResponse(
             recommendationItem,

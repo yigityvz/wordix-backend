@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -32,28 +31,29 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SetUserLearningFla
 public sealed class SetUserLearningFlagCommandHandler
     : IRequestHandler<SetUserLearningFlagCommand, UserLearningFlagResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
-    private readonly IUnitOfWork _unitOfWork;
+   
 
     public SetUserLearningFlagCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
-        IRepository<UserLearningFlag> userLearningFlagRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<UserLearningFlag> userLearningFlagRepository
+        )
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningFlagRepository = userLearningFlagRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     public async Task<UserLearningFlagResponse> Handle(
         SetUserLearningFlagCommand request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         var userLearningItem = await _userLearningItemRepository.FirstOrDefaultAsync(
             item =>
@@ -93,8 +93,7 @@ public sealed class SetUserLearningFlagCommandHandler
             flag,
             cancellationToken);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
-
+        
         return UserDictionaryMapper.ToUserLearningFlagResponse(flag);
     }
 

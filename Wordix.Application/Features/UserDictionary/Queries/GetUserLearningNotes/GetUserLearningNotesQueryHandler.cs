@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -28,16 +27,13 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserLearningNote
 public sealed class GetUserLearningNotesQueryHandler
     : IRequestHandler<GetUserLearningNotesQuery, GetUserLearningNotesResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningNote> _userLearningNoteRepository;
 
     public GetUserLearningNotesQueryHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
         IRepository<UserLearningNote> userLearningNoteRepository)
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningNoteRepository = userLearningNoteRepository;
     }
@@ -46,7 +42,11 @@ public sealed class GetUserLearningNotesQueryHandler
         GetUserLearningNotesQuery request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         // Önce UserLearningItem current user'a ait mi kontrol ediyoruz.
         //

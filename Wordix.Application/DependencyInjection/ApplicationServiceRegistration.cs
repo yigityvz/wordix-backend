@@ -76,11 +76,18 @@ public static class ApplicationServiceRegistration
         // Pipeline sırası registration sırasına göre çalışır:
         // 1. LoggingBehavior
         // 2. ValidationBehavior
-        // 3. Handler
+        // 3. CurrentUserBehavior
+        // 4. Handler
         //
-        // Böylece loglama request'in validation dahil tüm süresini ölçer.
+        // Böylece:
+        // - Logging tüm request süresini ölçer.
+        // - Validation önce çalışır.
+        // - Request valid ise current user bilgisi pipeline'da çözülür.
+        // - Handler current user servisini inject etmek zorunda kalmadan request.KeycloakUserId kullanır.
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(CurrentUserBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnitOfWorkBehavior<,>));
 
         // Önemli:
         // Eski mimaride burada ICurrentUserProfileService register ediliyordu.

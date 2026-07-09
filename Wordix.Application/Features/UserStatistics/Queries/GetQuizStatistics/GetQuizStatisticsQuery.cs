@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.UserStatistics.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserStatistics.Queries.GetQuizStatistics;
@@ -16,9 +17,12 @@ namespace Wordix.Application.Features.UserStatistics.Queries.GetQuizStatistics;
 /// 
 /// Bu class sadece veri taşıma modelidir.
 /// Gerçek filtre normalizasyonu handler tarafında yapılacaktır.
+/// 
+/// Kullanıcı id client'tan alınmaz.
+/// CurrentUserBehavior tarafından request.KeycloakUserId üzerine yazılır.
 /// </summary>
 public sealed class GetQuizStatisticsQuery
-    : IRequest<QuizStatisticsResponse>
+    : IRequest<QuizStatisticsResponse>, IRequiresCurrentUser
 {
     public GetQuizStatisticsQuery(
         DateTime? fromUtc = null,
@@ -35,6 +39,12 @@ public sealed class GetQuizStatisticsQuery
         QuizContentMode = quizContentMode;
         DifficultyGroup = difficultyGroup;
     }
+
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// Client tarafından gönderilmez.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
 
     public DateTime? FromUtc { get; }
 

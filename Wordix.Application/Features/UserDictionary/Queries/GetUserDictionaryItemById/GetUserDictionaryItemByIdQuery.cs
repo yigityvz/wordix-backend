@@ -1,4 +1,5 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryItemById;
@@ -13,9 +14,23 @@ namespace Wordix.Application.Features.UserDictionary.Queries.GetUserDictionaryIt
 /// 
 /// Buradaki id global LearningItemId değildir.
 /// Buradaki id UserLearningItemId değeridir.
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - Controller KeycloakUserId set etmez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini çözer.
 /// </summary>
-public sealed record GetUserDictionaryItemByIdQuery : IRequest<UserDictionaryItemResponse>
+public sealed record GetUserDictionaryItemByIdQuery
+    : IRequest<UserDictionaryItemResponse>, IRequiresCurrentUser
 {
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// 
+    /// Bu değer client tarafından gönderilmez.
+    /// Dictionary item ownership kontrolü için kullanılır.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+
     /// <summary>
     /// Kullanıcının kişisel dictionary item id değeridir.
     /// 

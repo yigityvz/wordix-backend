@@ -1,5 +1,4 @@
 ﻿using MediatR;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserStatistics.Dtos.Responses;
 using Wordix.Application.Features.UserStatistics.Mappers;
@@ -19,14 +18,11 @@ namespace Wordix.Application.Features.UserStatistics.Queries.GetDeckStatistics;
 public sealed class GetDeckStatisticsQueryHandler
     : IRequestHandler<GetDeckStatisticsQuery, DeckStatisticsResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserStatisticsRepository _userStatisticsRepository;
 
     public GetDeckStatisticsQueryHandler(
-        ICurrentUserService currentUserService,
         IUserStatisticsRepository userStatisticsRepository)
     {
-        _currentUserService = currentUserService;
         _userStatisticsRepository = userStatisticsRepository;
     }
 
@@ -34,7 +30,7 @@ public sealed class GetDeckStatisticsQueryHandler
         GetDeckStatisticsQuery request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        var keycloakUserId = request.KeycloakUserId;
 
         var models = await _userStatisticsRepository.GetDeckStatisticsAsync(
             keycloakUserId,

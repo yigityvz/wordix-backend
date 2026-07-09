@@ -1,4 +1,6 @@
 ﻿using MediatR;
+using Wordix.Application.Common.Interfaces.Identity;
+using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 
 namespace Wordix.Application.Features.UserDictionary.Commands.RemoveUserLearningFlag;
@@ -14,8 +16,19 @@ namespace Wordix.Application.Features.UserDictionary.Commands.RemoveUserLearning
 /// 
 /// Örnek:
 /// DELETE /api/user-dictionary/{userLearningItemId}/flags/Difficult
+/// 
+/// Current user bilgisi:
+/// - Client KeycloakUserId göndermez.
+/// - CurrentUserBehavior pipeline içinde token'dan KeycloakUserId değerini çözer.
 /// </summary>
 public sealed record RemoveUserLearningFlagCommand(
     Guid UserLearningItemId,
     string FlagType)
-    : IRequest<UserLearningFlagResponse>;
+    : IRequest<UserLearningFlagResponse>, IRequiresCurrentUser, ITransactionalRequest
+{
+    /// <summary>
+    /// CurrentUserBehavior tarafından doldurulan Keycloak user id değeridir.
+    /// Client tarafından gönderilmez.
+    /// </summary>
+    public string KeycloakUserId { get; set; } = string.Empty;
+}

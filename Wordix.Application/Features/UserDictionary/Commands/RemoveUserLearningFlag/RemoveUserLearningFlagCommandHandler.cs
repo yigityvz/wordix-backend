@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Application.Features.UserDictionary.Mappers;
@@ -32,28 +31,29 @@ namespace Wordix.Application.Features.UserDictionary.Commands.RemoveUserLearning
 public sealed class RemoveUserLearningFlagCommandHandler
     : IRequestHandler<RemoveUserLearningFlagCommand, UserLearningFlagResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IRepository<UserLearningItem> _userLearningItemRepository;
     private readonly IRepository<UserLearningFlag> _userLearningFlagRepository;
-    private readonly IUnitOfWork _unitOfWork;
+    
 
     public RemoveUserLearningFlagCommandHandler(
-        ICurrentUserService currentUserService,
         IRepository<UserLearningItem> userLearningItemRepository,
-        IRepository<UserLearningFlag> userLearningFlagRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<UserLearningFlag> userLearningFlagRepository
+       )
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _userLearningFlagRepository = userLearningFlagRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     public async Task<UserLearningFlagResponse> Handle(
         RemoveUserLearningFlagCommand request,
         CancellationToken cancellationToken)
     {
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
+        //
+        // Bu değer client'tan gelmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup request'e yazar.
+        var keycloakUserId = request.KeycloakUserId;
 
         // Önce route'tan gelen UserLearningItemId gerçekten current user'a mı ait kontrol ediyoruz.
         //
@@ -94,7 +94,7 @@ public sealed class RemoveUserLearningFlagCommandHandler
 
         _userLearningFlagRepository.Remove(flag);
 
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         return response;
     }

@@ -1,6 +1,5 @@
 ﻿using MediatR;
 using Wordix.Application.Common.Exceptions;
-using Wordix.Application.Common.Interfaces.Identity;
 using Wordix.Application.Common.Interfaces.Persistence;
 using Wordix.Application.Features.UserDictionary.Dtos.Responses;
 using Wordix.Domain.Entities;
@@ -38,7 +37,6 @@ namespace Wordix.Application.Features.UserDictionary.Commands.SaveLearningItem;
 public sealed class SaveLearningItemCommandHandler
     : IRequestHandler<SaveLearningItemCommand, SaveLearningItemResponse>
 {
-    private readonly ICurrentUserService _currentUserService;
     private readonly IUserLearningItemRepository _userLearningItemRepository;
     private readonly IRepository<LearningItem> _learningItemRepository;
     private readonly IRepository<Meaning> _meaningRepository;
@@ -46,7 +44,7 @@ public sealed class SaveLearningItemCommandHandler
     private readonly IRepository<UserLearningItem> _userLearningItemGenericRepository;
     private readonly IRepository<UserLearningProgress> _userLearningProgressRepository;
     private readonly IRepository<LearningProgressHistory> _learningProgressHistoryRepository;
-    private readonly IUnitOfWork _unitOfWork;
+   
 
     /// <summary>
     /// Handler ihtiyacı olan tüm servisleri DI üzerinden alır.
@@ -59,17 +57,15 @@ public sealed class SaveLearningItemCommandHandler
     /// Bu servis Application katmanına sadece gerekli kullanıcı bilgisini sağlar.
     /// </summary>
     public SaveLearningItemCommandHandler(
-        ICurrentUserService currentUserService,
         IUserLearningItemRepository userLearningItemRepository,
         IRepository<LearningItem> learningItemRepository,
         IRepository<Meaning> meaningRepository,
         IRepository<LookupHistory> lookupHistoryRepository,
         IRepository<UserLearningItem> userLearningItemGenericRepository,
         IRepository<UserLearningProgress> userLearningProgressRepository,
-        IRepository<LearningProgressHistory> learningProgressHistoryRepository,
-        IUnitOfWork unitOfWork)
+        IRepository<LearningProgressHistory> learningProgressHistoryRepository
+        )
     {
-        _currentUserService = currentUserService;
         _userLearningItemRepository = userLearningItemRepository;
         _learningItemRepository = learningItemRepository;
         _meaningRepository = meaningRepository;
@@ -77,7 +73,7 @@ public sealed class SaveLearningItemCommandHandler
         _userLearningItemGenericRepository = userLearningItemGenericRepository;
         _userLearningProgressRepository = userLearningProgressRepository;
         _learningProgressHistoryRepository = learningProgressHistoryRepository;
-        _unitOfWork = unitOfWork;
+        
     }
 
     /// <summary>
@@ -87,12 +83,14 @@ public sealed class SaveLearningItemCommandHandler
         SaveLearningItemCommand request,
         CancellationToken cancellationToken)
     {
-        // 1. Current user'ın KeycloakUserId değerini alıyoruz.
+        // 1. Current user'ın KeycloakUserId değerini request üzerinden alıyoruz.
         //
-        // Bu değer JWT token içindeki "sub" claiminden gelir.
-        // Backend burada UserProfile oluşturmaz, UserProfileId üretmez.
-        // Kullanıcıya ait dictionary/progress/quiz gibi kayıtlar bu KeycloakUserId ile ilişkilendirilir.
-        var keycloakUserId = _currentUserService.GetRequiredKeycloakUserId();
+        // Bu değer client'tan gelmez.
+        // Controller tarafından set edilmez.
+        // CurrentUserBehavior, MediatR pipeline içinde token'dan okuyup bu request'e yazar.
+        //
+        // Böylece handler artık ICurrentUserService'e doğrudan bağımlı değildir.
+        var keycloakUserId = request.KeycloakUserId;
 
         // 2. Kaydedilecek LearningItem gerçekten var mı kontrol ediyoruz.
         var learningItem = await GetRequiredLearningItemAsync(
@@ -176,9 +174,7 @@ public sealed class SaveLearningItemCommandHandler
             progressHistory,
             cancellationToken);
 
-        // 11. Tek SaveChanges ile hepsini kaydediyoruz.
-        // EF Core SaveChanges kendi transaction mantığıyla bu kayıtları birlikte işler.
-        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        
 
         // 12. API response mapping işini feature mapper'a bırakıyoruz.
         // Handler entity oluşturma ve use-case akışını yönetir;
