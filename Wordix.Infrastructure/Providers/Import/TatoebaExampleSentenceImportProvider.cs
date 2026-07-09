@@ -205,11 +205,23 @@ public sealed class TatoebaExampleSentenceImportProvider
 
         var rowNumber = 0;
 
-        while (!reader.EndOfStream)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // CA2024:
+            // Async method içinde StreamReader.EndOfStream kullanmıyoruz.
+            // EndOfStream bazı durumlarda senkron bloklama yapabilir.
+            //
+            // Doğru async okuma modeli:
+            // ReadLineAsync çağrılır; dosya/stream sonuna gelindiyse null döner.
             var line = await reader.ReadLineAsync(cancellationToken);
+
+            if (line is null)
+            {
+                break;
+            }
+
             rowNumber++;
 
             if (string.IsNullOrWhiteSpace(line))
@@ -323,11 +335,21 @@ public sealed class TatoebaExampleSentenceImportProvider
 
         var linkRowNumber = 0;
 
-        while (!reader.EndOfStream)
+        while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
+            // CA2024:
+            // Async method içinde StreamReader.EndOfStream kullanmak yerine
+            // ReadLineAsync sonucunun null olup olmadığını kontrol ediyoruz.
+            // Bu, stream sonunu async akışa uygun şekilde yakalar.
             var line = await reader.ReadLineAsync(cancellationToken);
+
+            if (line is null)
+            {
+                break;
+            }
+
             linkRowNumber++;
 
             if (string.IsNullOrWhiteSpace(line))

@@ -1,4 +1,7 @@
 ﻿using Wordix.Api.Middlewares;
+using System.Text.Json;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace Wordix.Api.DependencyInjection;
 
@@ -40,10 +43,22 @@ public static class ApplicationBuilderExtensions
         // Local geliştirmede bazı durumlarda port/sertifika ayarlarına göre davranışı değişebilir.
         app.UseHttpsRedirection();
 
+        // CORS, browser tabanlı frontend isteklerinde origin kontrolü yapar.
+        //
+        // Authentication/Authorization'dan önce konumlandırıyoruz.
+        // Böylece tarayıcının preflight OPTIONS istekleri auth engeline takılmadan
+        // CORS policy tarafından doğru şekilde cevaplanabilir.
+        app.UseCors(WordixCorsPolicies.Frontend);
+
         // Authentication:
         // Kullanıcının kim olduğunu belirler.
         // JWT token geçerli mi, claimler okunabiliyor mu burada kontrol edilir.
         app.UseAuthentication();
+
+        // RateLimiter'ı Authentication'dan sonra koyuyoruz.
+        // Böylece authenticated kullanıcılarda partition key olarak KeycloakUserId kullanılabilir.
+        // Token yoksa IP bazlı limit uygulanır.
+        app.UseRateLimiter();
 
         // Authorization:
         // Kullanıcının ilgili endpoint'e erişim yetkisi var mı kontrol eder.
@@ -53,6 +68,73 @@ public static class ApplicationBuilderExtensions
         // Controller endpointlerini pipeline'a ekler.
         app.MapControllers();
 
+        // Health check endpointleri.
+        //
+        // Bu endpointler authentication gerektirmez.
+        // Çünkü deployment, monitoring veya container orchestration sistemleri
+        // servis sağlığını token almadan kontrol edebilmelidir.
+        app.MapHealthChecks("/health", new HealthCheckOptions
+        {
+            ResponseWriter = WriteHealthCheckResponse
+        })
+            .AllowAnonymous();
+
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = healthCheck => healthCheck.Tags.Contains("live"),
+            ResponseWriter = WriteHealthCheckResponse
+        })
+            .AllowAnonymous();
+
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = healthCheck => healthCheck.Tags.Contains("ready"),
+            ResponseWriter = WriteHealthCheckResponse
+        })
+            .AllowAnonymous();
+
         return app;
+    }
+
+    /// <summary>
+    /// Health check response'unu okunabilir JSON formatında döndürür.
+    /// 
+    /// Teknik exception detail döndürmeyiz.
+    /// Production'da database connection string, SQL hatası veya stack trace gibi bilgiler
+    /// response'a sızmamalıdır.
+    /// </summary>
+    private static Task WriteHealthCheckResponse(
+        HttpContext context,
+        HealthReport report)
+    {
+        context.Response.ContentType = "application/json";
+
+        var response = new
+        {
+            status = report.Status.ToString(),
+            totalDurationMs = Math.Round(
+                report.TotalDuration.TotalMilliseconds,
+                2,
+                MidpointRounding.AwayFromZero),
+
+            checks = report.Entries.Select(entry => new
+            {
+                name = entry.Key,
+                status = entry.Value.Status.ToString(),
+                description = entry.Value.Description,
+                durationMs = Math.Round(
+                    entry.Value.Duration.TotalMilliseconds,
+                    2,
+                    MidpointRounding.AwayFromZero)
+            })
+        };
+
+        var jsonOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+
+        var json = JsonSerializer.Serialize(
+            response,
+            jsonOptions);
+
+        return context.Response.WriteAsync(json);
     }
 }

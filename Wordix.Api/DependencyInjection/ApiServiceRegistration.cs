@@ -31,6 +31,27 @@ public static class ApiServiceRegistration
             options.AllowEmptyInputInBodyModelBinding = true;
         });
 
+        // Frontend uygulamasının backend API'ye güvenli şekilde istek atabilmesi için CORS eklenir.
+        //
+        // Production hardening kararı:
+        // AllowAnyOrigin kullanılmaz.
+        // İzin verilen originler appsettings üzerinden yönetilir.
+        services.AddWordixCors(configuration);
+
+        // API'yi aşırı isteklerden korumak için rate limiting eklenir.
+        //
+        // İlk aşamada global fixed window rate limit kullanıyoruz.
+        // Authenticated kullanıcı varsa KeycloakUserId bazlı,
+        // token yoksa IP bazlı limit uygulanır.
+        services.AddWordixRateLimiting(configuration);
+
+        // API ve database sağlık kontrolleri eklenir.
+        //
+        // /health/live  -> API process ayakta mı?
+        // /health/ready -> API database'e bağlanabiliyor mu?
+        // /health       -> Genel sağlık durumu.
+        services.AddWordixHealthChecks();
+
 #warning Swagger UI production ortamında kapatılmalıdır. Bu uyarıyı dikkate alınız.
         services.AddWordixSwagger(); 
 

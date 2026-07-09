@@ -145,17 +145,28 @@ public sealed class ExceptionMiddleware
                 validationErrors: validationException.Errors),
 
             // .NET tarafında standart olarak fırlatılabilecek yetkisiz erişim hatası.
-            UnauthorizedAccessException unauthorizedAccessException => ErrorResponse.Create(
+            UnauthorizedAccessException => ErrorResponse.Create(
                 statusCode: StatusCodes.Status401Unauthorized,
                 errorCode: "UNAUTHORIZED",
-                message: unauthorizedAccessException.Message,
+
+                // UnauthorizedAccessException mesajı bazen teknik detay içerebilir.
+                // Bu yüzden client'a sabit ve güvenli bir mesaj döndürüyoruz.
+                message: "Authentication is required to access this resource.",
                 traceId: traceId),
 
             // Beklenmeyen tüm hatalar → HTTP 500
             _ => ErrorResponse.Create(
                 statusCode: StatusCodes.Status500InternalServerError,
                 errorCode: "INTERNAL_SERVER_ERROR",
-                message: "An unexpected error occurred.",
+
+                // Production güvenliği:
+                // Beklenmeyen sistem hatalarında kullanıcıya teknik detay dönmeyiz.
+                // SQL exception, stack trace, file path, connection bilgisi gibi detaylar
+                // sadece log tarafında kalmalıdır.
+                message: "An unexpected error occurred while processing your request.",
+
+                // Development ortamında debugging kolaylığı için exception.ToString() dönebilir.
+                // Production/Staging ortamlarında GetExceptionDetail null döner.
                 detail: GetExceptionDetail(exception),
                 traceId: traceId)
         };

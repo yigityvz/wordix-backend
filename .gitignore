@@ -5,6 +5,8 @@
 
 # dotenv files
 .env
+.env.*
+!.env.example
 
 # Wordix import source data files
 eng-tur.tei
@@ -18,6 +20,9 @@ tatoeba*.zip
 # Local-only app settings
 **/appsettings.Local.json
 **/appsettings.*.Local.json
+**/appsettings.Production.json
+**/appsettings.*.Production.json
+**/secrets.json
 
 # Dictionary/import source files
 *.tei
