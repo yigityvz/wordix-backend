@@ -54,6 +54,28 @@ services:
     networks:
       - wordix-network
 
+  wordix-api:
+    container_name: wordix-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+
+      ConnectionStrings__WordixDb: "Server=wordix-mssql,1433;Database=WordixDb;User Id=sa;Password=Kartal1453.;TrustServerCertificate=True;Encrypt=False"
+
+      Authentication__Keycloak__Authority: "http://host.docker.internal:8080/realms/wordix"
+      Authentication__Keycloak__Audience: "wordix-api"
+      Authentication__Keycloak__RequireHttpsMetadata: "false"
+    depends_on:
+      - wordix-mssql
+      - wordix-keycloak
+    networks:
+      - wordix-network
+
 volumes:
   wordix_keycloak_db_data:
   wordix_mssql_data:
