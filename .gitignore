@@ -35,6 +35,7 @@ data/imports/
 
 # Env variants
 .env.*
+!.env.example
 
 # User-specific files
 *.rsuser

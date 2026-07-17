@@ -65,6 +65,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
 
+      TranslationProviders__AzureTranslator__IsEnabled: "true"
+      TranslationProviders__AzureTranslator__Endpoint: "${AZURE_TRANSLATOR_ENDPOINT:-https://api.cognitive.microsofttranslator.com}"
+      TranslationProviders__AzureTranslator__SubscriptionKey: "${AZURE_TRANSLATOR_SUBSCRIPTION_KEY:?AZURE_TRANSLATOR_SUBSCRIPTION_KEY must be configured in the local .env file}"
+      TranslationProviders__AzureTranslator__Region: "${AZURE_TRANSLATOR_REGION:-}"
       ConnectionStrings__WordixDb: "Server=wordix-mssql,1433;Database=WordixDb;User Id=sa;Password=Kartal1453.;TrustServerCertificate=True;Encrypt=False"
 
       Authentication__Keycloak__Authority: "http://host.docker.internal:8080/realms/wordix"
